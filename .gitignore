@@ -1,0 +1,23 @@
+# Environment variables and API secrets (NEVER commit to GitHub)
+.env
+*.env
+
+# WhatsApp Web & Baileys local gateway session authentication
+whatsapp_server/auth_info_baileys/
+auth_info_baileys/
+
+# Dependencies
+node_modules/
+whatsapp_server/node_modules/
+venv/
+.venv/
+
+# Python Cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Temporary & database files
+PyWhatKit_DB.txt
+*.log
