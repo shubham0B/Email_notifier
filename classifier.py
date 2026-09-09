@@ -89,8 +89,7 @@ Return ONLY a valid JSON object:
   "summary": "Crisp 1-sentence executive summary under 15 words"
 }}
 """
-        model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        candidate_models = [os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"), "gemini-3.7-flash", "gemini-3.6-flash"]
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -100,17 +99,22 @@ Return ONLY a valid JSON object:
             }
         }
 
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            raw_text = result["candidates"][0]["content"]["parts"][0]["text"]
-            data = json.loads(raw_text)
-            return {
-                "category": data.get("category", "General").strip(),
-                "is_urgent": bool(data.get("is_urgent", False)),
-                "summary": data.get("summary", subject).strip()
-            }
-        else:
-            return rule_based_fallback_classify(subject, body, sender)
+        for model_name in candidate_models:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                response = requests.post(url, headers=headers, json=payload, timeout=10)
+                if response.status_code == 200:
+                    result = response.json()
+                    raw_text = result["candidates"][0]["content"]["parts"][0]["text"]
+                    data = json.loads(raw_text)
+                    return {
+                        "category": data.get("category", "General").strip(),
+                        "is_urgent": bool(data.get("is_urgent", False)),
+                        "summary": data.get("summary", subject).strip()
+                    }
+            except Exception:
+                continue
+
+        return rule_based_fallback_classify(subject, body, sender)
     except Exception:
         return rule_based_fallback_classify(subject, body, sender)

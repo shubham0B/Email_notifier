@@ -194,12 +194,15 @@ def generate_digest_pdf(
         tech_table = []
         for n in tech_items[:5]:
             title = n.get("title", "")
+            summary = n.get("summary", "")
             source = n.get("source", "Tech Wire")
             time_tag = n.get("pub_date", "Today")
             cell_content = [
-                Paragraph(f"• <b>{title}</b>", item_title_style),
-                Paragraph(f"<font color='#64748B' size='8'>Source: {source}  |  {time_tag}</font>", item_body_style)
+                Paragraph(f"• <b>{title}</b>", item_title_style)
             ]
+            if summary:
+                cell_content.append(Paragraph(f"<font color='#1E293B' size='8.5'>{summary}</font>", item_body_style))
+            cell_content.append(Paragraph(f"<font color='#64748B' size='7.5'>Source: {source}  |  {time_tag}</font>", item_body_style))
             tech_table.append([cell_content])
 
         t_tech = Table(tech_table, colWidths=[7.2 * inch])
@@ -219,7 +222,7 @@ def generate_digest_pdf(
     story.append(Spacer(1, 12))
 
     # 4. Section: Higher Education & College / University News
-    story.append(Paragraph("🎓 HIGHER EDUCATION & UNIVERSITY UPDATES", section_title_style))
+    story.append(Paragraph("🎓 HIGHER EDUCATION & PREMIER INSTITUTES", section_title_style))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
 
     edu_items = news.get("education", [])
@@ -227,12 +230,15 @@ def generate_digest_pdf(
         edu_table = []
         for n in edu_items[:5]:
             title = n.get("title", "")
+            summary = n.get("summary", "")
             source = n.get("source", "Education Desk")
             time_tag = n.get("pub_date", "Today")
             cell_content = [
-                Paragraph(f"• <b>{title}</b>", item_title_style),
-                Paragraph(f"<font color='#64748B' size='8'>Source: {source}  |  {time_tag}</font>", item_body_style)
+                Paragraph(f"• <b>{title}</b>", item_title_style)
             ]
+            if summary:
+                cell_content.append(Paragraph(f"<font color='#1E293B' size='8.5'>{summary}</font>", item_body_style))
+            cell_content.append(Paragraph(f"<font color='#64748B' size='7.5'>Source: {source}  |  {time_tag}</font>", item_body_style))
             edu_table.append([cell_content])
 
         t_edu = Table(edu_table, colWidths=[7.2 * inch])
