@@ -14,7 +14,14 @@ if sys.platform == "win32":
 from email_fetcher import get_mock_college_emails, fetch_live_emails
 from classifier import classify_email
 from formatter import build_whatsapp_digest
-from whatsapp_sender import send_whatsapp_message, send_via_whatsapp_web, send_via_local_gateway
+from news_fetcher import fetch_important_news
+from document_generator import generate_digest_pdf
+from whatsapp_sender import (
+    send_whatsapp_message, 
+    send_via_whatsapp_web, 
+    send_via_local_gateway,
+    send_document_via_gateway
+)
 
 def main():
     load_dotenv()
@@ -85,7 +92,7 @@ def main():
         processed_emails.append(combined)
         print(f"  • [{combined['category']}] {combined['sender_name']}: {combined['summary']}")
 
-    # 3. Format WhatsApp Digest
+    # 3. Fetch News & Generate PDF Document
     print("\n[Step 3/4] Constructing formatted WhatsApp digest with arrival timestamps...")
     digest_date_str = None
     if target_date:
@@ -96,16 +103,26 @@ def main():
             digest_date_str = target_date
     digest_message = build_whatsapp_digest(processed_emails, digest_date_str=digest_date_str)
 
+    print("\n[Step 3b/4] Fetching Tech & Higher Education news headlines and generating PDF document...")
+    news_data = fetch_important_news()
+    pdf_path = generate_digest_pdf(processed_emails, news_data, digest_date_str=digest_date_str)
+
     # 4. Dispatch
-    if args.gateway:
-        print("\n[Step 4/4] Delivering digest via Local WhatsApp Gateway (Silent/Headless)...")
+    if use_gateway:
+        print("\n[Step 4/4] Delivering digest and PDF document via Local WhatsApp Gateway (Silent/Headless)...")
         send_via_local_gateway(digest_message)
+        send_document_via_gateway(
+            pdf_path, 
+            caption=f"📄 *Executive Briefing Document ({digest_date_str or 'Today'})*\n• Email Action Summaries\n• Tech & AI News Headlines\n• Higher Education & University Updates"
+        )
     elif args.web:
         print("\n[Step 4/4] Delivering digest via WhatsApp Web...")
         send_via_whatsapp_web(digest_message)
     else:
         print("\n[Step 4/4] Delivering digest to WhatsApp...")
         send_whatsapp_message(digest_message, dry_run=is_dry_run)
+        if is_dry_run:
+            print(f"📄 [DRY-RUN] Executive PDF document created at: {pdf_path}")
 
     print("✨ Pipeline execution complete.")
 

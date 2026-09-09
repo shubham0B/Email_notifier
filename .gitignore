@@ -21,3 +21,5 @@ __pycache__/
 # Temporary & database files
 PyWhatKit_DB.txt
 *.log
+reports/
+*.pdf

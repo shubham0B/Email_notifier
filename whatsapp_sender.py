@@ -1,5 +1,13 @@
 import os
+import sys
 from typing import Dict, Any
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 def send_whatsapp_message(
     body: str,
@@ -196,5 +204,47 @@ def send_via_local_gateway(body: str, to_number: str = None) -> Dict[str, Any]:
     except Exception as e:
         print(f"❌ Could not reach Local Gateway at http://localhost:3000: {e}")
         return {"status": "error", "error": str(e)}
+
+def send_document_via_gateway(
+    file_path: str,
+    caption: str = "",
+    file_name: str = None,
+    to_number: str = None
+) -> Dict[str, Any]:
+    """
+    Sends a PDF or document file via the Local WhatsApp Gateway (POST /send-document).
+    Completely silent and headless.
+    """
+    ensure_gateway_running()
+    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "917378020506")
+    clean_phone = "".join(filter(str.isdigit, recipient))
+
+    resolved_name = file_name or os.path.basename(file_path)
+    abs_path = os.path.abspath(file_path)
+
+    print(f"📎 Sending document '{resolved_name}' via Local WhatsApp Gateway to {clean_phone}...")
+    try:
+        import requests
+        resp = requests.post(
+            "http://localhost:3000/send-document",
+            json={
+                "number": clean_phone,
+                "filePath": abs_path,
+                "fileName": resolved_name,
+                "caption": caption,
+                "mimetype": "application/pdf"
+            },
+            timeout=30
+        )
+        if resp.status_code == 200:
+            print("✅ Document successfully delivered to WhatsApp!")
+            return {"status": "success", "provider": "local_gateway_document", "data": resp.json()}
+        else:
+            print(f"⚠️ Gateway returned {resp.status_code}: {resp.text}")
+            return {"status": "error", "error": resp.text}
+    except Exception as e:
+        print(f"❌ Could not reach Local Gateway at http://localhost:3000/send-document: {e}")
+        return {"status": "error", "error": str(e)}
+
 
 

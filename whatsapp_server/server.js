@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import makeWASocket, { 
     DisconnectReason, 
@@ -90,6 +92,53 @@ app.post('/send', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Failed to send WhatsApp message:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Send document / PDF file endpoint
+app.post('/send-document', async (req, res) => {
+    try {
+        const { number, filePath, fileName, caption, mimetype } = req.body;
+
+        if (!number || !filePath) {
+            return res.status(400).json({ error: 'Both "number" and "filePath" are required.' });
+        }
+
+        if (!isConnected || !sock) {
+            return res.status(503).json({ error: 'WhatsApp gateway is not connected yet.' });
+        }
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: `File not found on disk: ${filePath}` });
+        }
+
+        // Clean phone number format
+        let cleanNumber = number.replace(/\D/g, '');
+        if (!cleanNumber.endsWith('@s.whatsapp.net')) {
+            cleanNumber = `${cleanNumber}@s.whatsapp.net`;
+        }
+
+        const fileBuffer = fs.readFileSync(filePath);
+        const resolvedName = fileName || path.basename(filePath) || 'Daily_Executive_Digest.pdf';
+        const resolvedMime = mimetype || 'application/pdf';
+
+        console.log(`📎 Sending document "${resolvedName}" (${fileBuffer.length} bytes) to ${cleanNumber}...`);
+        const sent = await sock.sendMessage(cleanNumber, {
+            document: fileBuffer,
+            mimetype: resolvedMime,
+            fileName: resolvedName,
+            caption: caption || ''
+        });
+
+        res.json({ 
+            success: true, 
+            messageId: sent.key.id,
+            to: cleanNumber,
+            fileName: resolvedName
+        });
+    } catch (error) {
+        console.error('❌ Failed to send WhatsApp document:', error);
         res.status(500).json({ error: error.message });
     }
 });
