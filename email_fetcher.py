@@ -3,6 +3,8 @@ import sys
 import email
 from email.header import decode_header
 import imaplib
+import re
+import html
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
@@ -12,6 +14,81 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+def clean_email_html(raw_html: str) -> str:
+    """Strips tags, scripts, and CSS, leaving clean, readable human text."""
+    if not raw_html:
+        return ""
+    # Strip script, style, head, noscript
+    text = re.sub(r'<(script|style|head|noscript)[^>]*>.*?</\1>', ' ', raw_html, flags=re.DOTALL | re.IGNORECASE)
+    # Convert structural HTML into newlines
+    text = re.sub(r'<(br|p|div|tr|li|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
+    # Strip all remaining tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # Unescape HTML entities
+    text = html.unescape(text)
+    # Filter blank lines and normalize whitespace
+    lines = [re.sub(r'\s+', ' ', line).strip() for line in text.splitlines()]
+    clean = '\n'.join([l for l in lines if l])
+    return clean
+
+def extract_email_body(msg) -> str:
+    """Extracts readable text from multipart or single-part message, falling back to clean HTML."""
+    plain_text = ""
+    html_text = ""
+
+    if msg.is_multipart():
+        for part in msg.walk():
+            ctype = part.get_content_type()
+            disp = str(part.get("Content-Disposition"))
+            if "attachment" not in disp:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    try:
+                        decoded = payload.decode(charset, errors="ignore")
+                    except Exception:
+                        decoded = payload.decode("utf-8", errors="ignore")
+
+                    if ctype == "text/plain" and not plain_text:
+                        plain_text = decoded
+                    elif ctype == "text/html" and not html_text:
+                        html_text = decoded
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            try:
+                decoded = payload.decode(charset, errors="ignore")
+            except Exception:
+                decoded = payload.decode("utf-8", errors="ignore")
+            if msg.get_content_type() == "text/plain":
+                plain_text = decoded
+            else:
+                html_text = decoded
+
+    # Prefer plain text if substantial; otherwise clean HTML
+    if len(plain_text.strip()) > 30:
+        return plain_text.strip()
+    elif html_text:
+        return clean_email_html(html_text)
+    return plain_text.strip()
+
+def decode_full_header(header_val: str) -> str:
+    """Decodes all chunks of an email header across multiple encodings."""
+    if not header_val:
+        return ""
+    try:
+        parts = decode_header(header_val)
+        decoded = ""
+        for chunk, enc in parts:
+            if isinstance(chunk, bytes):
+                decoded += chunk.decode(enc or "utf-8", errors="ignore")
+            else:
+                decoded += str(chunk)
+        return decoded.strip()
+    except Exception:
+        return str(header_val)
 
 def get_mock_college_emails() -> List[Dict[str, Any]]:
     """
@@ -24,7 +101,7 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
             "sender": "admissions.helpdesk@gmail.com",
             "sender_name": "Rohan Deshmukh (Applicant)",
             "subject": "Inquiry regarding B.Tech Computer Science Quota Admission & Eligibility",
-            "body": "Respected Dean Sir, I have scored 96.4 percentile in JEE. Could you please clarify if management quota forms are open for the 2026-27 session?",
+            "body": "Respected Dean Sir, I have scored 96.4 percentile in JEE Mains 2026. Could you please clarify if management quota forms are open for the 2026-27 session, what the fee structure is, and the last date for registration?",
             "timestamp": f"{today_prefix}T08:15:00"
         },
         {
@@ -32,7 +109,7 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
             "sender": "finance.accounts@college.edu",
             "sender_name": "Accounts Department",
             "subject": "Approval needed: Chemistry Lab Equipment Vendor Invoice #INV-8821",
-            "body": "Dean Sir, attached is the revised invoice of Rs 4,80,000 for glassware and spectrophotometer supplies. Awaiting your sign-off for payment release.",
+            "body": "Dean Sir, attached is the revised invoice of Rs 4,80,000 for glassware and spectrophotometer supplies delivered by Borosil Instruments. The audit team has cleared the bill; awaiting your final sign-off to release payment before Friday.",
             "timestamp": f"{today_prefix}T09:30:00"
         },
         {
@@ -40,7 +117,7 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
             "sender": "registrar@university-board.ac.in",
             "sender_name": "State University Registrar",
             "subject": "URGENT: Mandatory Accreditation Audit Committee Visit scheduled for Friday",
-            "body": "Strictly Confidential: All college Deans must submit their SSR and faculty compliance reports by Thursday 5:00 PM ahead of Friday's inspection.",
+            "body": "Strictly Confidential: All affiliated college Deans and Principals must submit their SSR and faculty compliance documentation by Thursday 5:00 PM ahead of the NAAC peer team inspection scheduled for Friday morning.",
             "timestamp": f"{today_prefix}T10:05:00"
         },
         {
@@ -48,7 +125,7 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
             "sender": "shreya.patel@student.college.edu",
             "sender_name": "Shreya Patel (Final Year CS)",
             "subject": "Application for Merit-cum-Means Post-Matric Scholarship Endorsement",
-            "body": "Sir, I have submitted the state scholarship portal application. Need the Dean's digital signature on the income certificate verification.",
+            "body": "Respected Sir, I have submitted the state scholarship portal application for the academic year. The portal closes on 15th September and requires the Dean's digital signature on the income verification document.",
             "timestamp": f"{today_prefix}T11:45:00"
         },
         {
@@ -56,7 +133,7 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
             "sender": "hod.mechanical@college.edu",
             "sender_name": "Dr. A. K. Verma (HOD Mech)",
             "subject": "Faculty Leave Application & Guest Lecture arrangement for next week",
-            "body": "Respected Dean, requesting 3 days of duty leave from 15th Sept to attend the International Robotics Symposium. Alternate classes arranged.",
+            "body": "Respected Dean, requesting 3 days of duty leave from 15th to 17th Sept to present a peer-reviewed paper at the International Robotics Symposium in Bangalore. Alternate faculty arrangements for B.Tech lectures have been scheduled.",
             "timestamp": f"{today_prefix}T13:20:00"
         },
         {
@@ -64,7 +141,7 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
             "sender": "statecounselling2026@dte.gov.in",
             "sender_name": "State Counselling Board (DTE)",
             "subject": "Round 2 Seat Allotment Matrix & Vacancy Verification for Engineering",
-            "body": "Please find attached the provisional vacancy list for Round 2 engineering admissions. Please confirm institutional seat counts.",
+            "body": "Please find attached the provisional vacancy and seat matrix for Round 2 central engineering counselling. Institutional verification and sign-off on vacant branch seats must be completed on the DTE portal by 6:00 PM today.",
             "timestamp": f"{today_prefix}T14:50:00"
         }
     ]
@@ -73,6 +150,7 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
     """
     Connects to mailbox via IMAP and fetches emails.
     If target_date is provided (YYYY-MM-DD), fetches emails received on that specific date.
+    Extracts clean readable text (even from complex HTML emails).
     """
     host = os.getenv("EMAIL_HOST", "imap.gmail.com")
     port = int(os.getenv("EMAIL_PORT", "993"))
@@ -97,7 +175,6 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
             print(f"📅 Searching mailbox specifically for date: {target_date} ({since_str})...")
             status, messages = mail.search(None, "SINCE", since_str, "BEFORE", before_str)
         else:
-            # Search for unread messages first
             status, messages = mail.search(None, "UNSEEN")
 
         msg_ids = messages[0].split() if (status == "OK" and messages and messages[0]) else []
@@ -118,9 +195,9 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
                     return []
         else:
             print(f"📥 Found {len(msg_ids)} email(s) for target window. Parsing...")
-            msg_ids = msg_ids[-30:] # Process up to 30 emails
+            msg_ids = msg_ids[-30:]  # Process up to 30 emails
 
-        for msg_id in msg_ids[-30:]: # Process up to last 30 unread
+        for msg_id in msg_ids:
             res, data = mail.fetch(msg_id, "(RFC822)")
             if res != "OK":
                 continue
@@ -128,21 +205,13 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
 
-            # Decode Subject
-            subject, encoding = decode_header(msg.get("Subject", "No Subject"))[0]
-            if isinstance(subject, bytes):
-                subject = subject.decode(encoding or "utf-8", errors="ignore")
+            subject = decode_full_header(msg.get("Subject", "No Subject"))
+            sender = decode_full_header(msg.get("From", "Unknown Sender"))
 
-            # Decode From
-            raw_from = msg.get("From", "Unknown Sender")
-            from_parts = decode_header(raw_from)
-            decoded_from = ""
-            for part, enc in from_parts:
-                if isinstance(part, bytes):
-                    decoded_from += part.decode(enc or "utf-8", errors="ignore")
-                else:
-                    decoded_from += str(part)
-            sender = decoded_from
+            # Clean Sender Name
+            sender_name = sender.split("<")[0].strip('" ')
+            if not sender_name or "@" in sender_name:
+                sender_name = sender
 
             # Date / Timestamp
             date_tuple = email.utils.parsedate_tz(msg.get("Date"))
@@ -152,28 +221,15 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
             else:
                 timestamp_str = datetime.now().isoformat()
 
-            # Body parsing
-            body = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    content_type = part.get_content_type()
-                    content_disposition = str(part.get("Content-Disposition"))
-                    if content_type == "text/plain" and "attachment" not in content_disposition:
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            body = payload.decode(errors="ignore")
-                            break
-            else:
-                payload = msg.get_payload(decode=True)
-                if payload:
-                    body = payload.decode(errors="ignore")
+            # Clean, readable body extraction (handles HTML, scripts, CSS, multipart)
+            body = extract_email_body(msg)
 
             emails.append({
-                "id": msg_id.decode(),
+                "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
                 "sender": sender,
-                "sender_name": sender.split("<")[0].strip('" '),
+                "sender_name": sender_name,
                 "subject": subject,
-                "body": body[:1000],
+                "body": body[:2500],  # Full rich text for accurate AI analysis
                 "timestamp": timestamp_str
             })
 
