@@ -44,26 +44,89 @@ def send_whatsapp_message(
 
 def send_via_whatsapp_web(body: str, to_number: str = None) -> Dict[str, Any]:
     """
-    Directly delivers the message to WhatsApp Web without any Twilio templates or restrictions.
+    Directly delivers the message to WhatsApp Web and automatically triggers the Send button.
+    Eliminates pywhatkit's bug where clicking screen-center unfocuses the input box.
     """
-    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "+917378020506")
-    clean_phone = recipient.replace("whatsapp:", "").replace(" ", "").strip()
-    if not clean_phone.startswith("+"):
-        clean_phone = "+" + clean_phone
+    import time
+    import urllib.parse
+    import webbrowser
+    import pyautogui
+    import pyperclip
+
+    pyautogui.FAILSAFE = False
+
+    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "917378020506")
+    # WhatsApp Web requires DIGITS ONLY in the URL. A '+' sign in query strings turns into a space (%20)
+    clean_phone = "".join(filter(str.isdigit, recipient))
+
+    # Copy message to clipboard as backup
+    try:
+        pyperclip.copy(body)
+    except Exception:
+        pass
+
+    encoded_message = urllib.parse.quote(body)
+    url = f"https://web.whatsapp.com/send?phone={clean_phone}&text={encoded_message}"
 
     print(f"🚀 Opening WhatsApp Web to deliver digest to {clean_phone}...")
+    webbrowser.open(url)
+
+    wait_seconds = int(os.getenv("WHATSAPP_WEB_WAIT", "20"))
+    print(f"⏳ Waiting {wait_seconds}s for WhatsApp Web interface to load and ready the Send button...")
+    for sec in range(wait_seconds, 0, -5):
+        print(f"   [{sec}s remaining...]")
+        time.sleep(min(5, sec))
+
     try:
-        import pywhatkit
-        pywhatkit.sendwhatmsg_instantly(
-            phone_no=clean_phone,
-            message=body,
-            wait_time=15,
-            tab_close=False
-        )
-        print("✅ Message sent via WhatsApp Web!")
+        screen_w, screen_h = pyautogui.size()
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        send_btn_path = os.path.join(base_dir, "send_button.png")
+
+        print("⌨️  Locating WhatsApp Web Send button...")
+
+        # 1. Bring browser window to foreground
+        pyautogui.click(screen_w // 2, screen_h // 2)
+        time.sleep(0.3)
+
+        # 2. Computer Vision Recognition: Locate the exact green send button on screen
+        clicked = False
+        if os.path.exists(send_btn_path):
+            print("🔍 Scanning screen with OpenCV for green Send button icon...")
+            for attempt in range(8):
+                try:
+                    loc = pyautogui.locateCenterOnScreen(send_btn_path, confidence=0.85)
+                    if not loc:
+                        loc = pyautogui.locateCenterOnScreen(send_btn_path, confidence=0.75)
+                    if loc:
+                        print(f"🎯 Exact Send button detected on screen at: ({loc.x}, {loc.y})! Clicking now...")
+                        pyautogui.click(loc.x, loc.y)
+                        time.sleep(0.2)
+                        pyautogui.click(loc.x, loc.y)
+                        clicked = True
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.8)
+
+        # 3. Direct Keyboard Send
+        print("⌨️  Triggering Enter and Ctrl+Enter keystrokes...")
+        pyautogui.press("enter")
+        time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "enter")
+        time.sleep(0.3)
+
+        # Only press Enter from keyboard - absolutely NO random coordinate clicking
+        if not clicked:
+            print("⌨️ Pressing Enter on compose box...")
+            pyautogui.press("enter")
+
+        # Give WhatsApp Web 3 seconds to complete cloud sync with mobile device
+        time.sleep(3)
+
+        print("✅ Message automatically sent and synced via WhatsApp Web!")
         return {"status": "success", "provider": "whatsapp_web"}
     except Exception as e:
-        print(f"❌ Error sending via WhatsApp Web: {e}")
+        print(f"❌ Error during auto-send: {e}")
         return {"status": "error", "error": str(e)}
 
 def ensure_gateway_running() -> bool:
