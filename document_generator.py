@@ -221,17 +221,13 @@ def generate_digest_pdf(
 
     story.append(Spacer(1, 12))
 
-    # 4. Section: Higher Education & College / University News
-    story.append(Paragraph("🎓 HIGHER EDUCATION & PREMIER INSTITUTES", section_title_style))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
-
-    edu_items = news.get("education", [])
-    if edu_items:
-        edu_table = []
-        for n in edu_items[:5]:
+    # Helper function to create news table
+    def build_news_table(items, bg_color='#EFF6FF', border_color='#BFDBFE', grid_color='#DBEAFE'):
+        table_rows = []
+        for n in items:
             title = n.get("title", "")
             summary = n.get("summary", "")
-            source = n.get("source", "Education Desk")
+            source = n.get("source", "News Desk")
             time_tag = n.get("pub_date", "Today")
             cell_content = [
                 Paragraph(f"• <b>{title}</b>", item_title_style)
@@ -239,21 +235,46 @@ def generate_digest_pdf(
             if summary:
                 cell_content.append(Paragraph(f"<font color='#1E293B' size='8.5'>{summary}</font>", item_body_style))
             cell_content.append(Paragraph(f"<font color='#64748B' size='7.5'>Source: {source}  |  {time_tag}</font>", item_body_style))
-            edu_table.append([cell_content])
+            table_rows.append([cell_content])
 
-        t_edu = Table(edu_table, colWidths=[7.2 * inch])
-        t_edu.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#EFF6FF')),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#BFDBFE')),
-            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#DBEAFE')),
+        t = Table(table_rows, colWidths=[7.2 * inch])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(bg_color)),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor(border_color)),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor(grid_color)),
             ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('LEFTPADDING', (0, 0), (-1, -1), 8),
             ('RIGHTPADDING', (0, 0), (-1, -1), 8),
         ]))
-        story.append(t_edu)
+        return t
+
+    # 4. Section: India Higher Education (Top 10)
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("🇮🇳 HIGHER EDUCATION & INSTITUTES (INDIA - TOP 10)", section_title_style))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
+
+    india_items = news.get("education_india", news.get("education", []))
+    if india_items:
+        story.append(build_news_table(india_items[:10], bg_color='#EFF6FF', border_color='#BFDBFE', grid_color='#DBEAFE'))
     else:
-        story.append(Paragraph("<i>No new education headlines available.</i>", item_body_style))
+        story.append(Paragraph("<i>No new national education headlines available.</i>", item_body_style))
+
+    # 5. Section: World Higher Education (Top 5)
+    world_items = news.get("education_world", [])
+    if world_items:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("🌍 GLOBAL HIGHER EDUCATION & UNIVERSITIES (WORLD - TOP 5)", section_title_style))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
+        story.append(build_news_table(world_items[:5], bg_color='#F8FAFC', border_color='#CBD5E1', grid_color='#E2E8F0'))
+
+    # 6. Section: Rajasthan Education Updates
+    raj_items = news.get("education_rajasthan", [])
+    if raj_items:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("🏰 RAJASTHAN HIGHER EDUCATION & STATE UPDATES", section_title_style))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
+        story.append(build_news_table(raj_items[:5], bg_color='#FFFBEB', border_color='#FDE68A', grid_color='#FEF3C7'))
 
     story.append(Spacer(1, 14))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#E2E8F0'), spaceBefore=5, spaceAfter=5))

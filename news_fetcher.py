@@ -14,13 +14,13 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-def fetch_rss_candidates(query: str, max_items: int = 15) -> List[Dict[str, str]]:
+def fetch_rss_candidates(query: str, max_items: int = 15, hl: str = "en-IN", gl: str = "IN", ceid: str = "IN:en") -> List[Dict[str, str]]:
     """
-    Fetches raw news candidates from Google News RSS feed for a targeted search query.
+    Fetches raw news candidates from Google News RSS feed for a targeted query.
     100% free, requires no API key.
     """
     encoded_query = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en"
+    url = f"https://news.google.com/rss/search?q={encoded_query}&hl={hl}&gl={gl}&ceid={ceid}"
 
     req = urllib.request.Request(
         url,
@@ -70,151 +70,173 @@ def deduplicate_items(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
             result.append(it)
     return result
 
-def curate_news_with_gemini(
-    tech_candidates: List[Dict[str, str]], 
-    edu_candidates: List[Dict[str, str]], 
+def curate_all_news_with_gemini(
+    tech_candidates: List[Dict[str, str]],
+    india_candidates: List[Dict[str, str]],
+    world_candidates: List[Dict[str, str]],
+    rajasthan_candidates: List[Dict[str, str]],
     api_key: str
 ) -> Dict[str, List[Dict[str, str]]]:
     """
-    Uses Google Gemini to curate, evaluate, and extract ONLY the top breakthrough, 
-    high-impact news items from candidate pools.
+    Uses Google Gemini with model fallback to curate:
+    1. Top Tech & AI news (4-5 items)
+    2. Top 10 India Education news
+    3. Top 5 World Education news
+    4. Top Rajasthan Education news (3-5 items)
     """
     import requests
 
     candidate_models = ["gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.6-flash"]
 
     prompt = f"""
-You are an executive intelligence director curating high-impact briefings for university leadership and tech executives.
-Analyze the candidate real-time headlines below.
+You are an executive intelligence director curating high-impact briefings for university leadership and education executives.
+Analyze the candidate headlines below and curate them into 4 distinct, high-value sections:
 
---- CANDIDATE TECH & AI HEADLINES ---
+--- 1. TECH & AI HEADLINES ---
 {json.dumps(tech_candidates, indent=2)}
+Guidelines:
+- Select 4 to 5 genuine frontier developments: New AI model launches (OpenAI, Gemini, Anthropic, DeepSeek, Meta), reasoning breakthroughs, major AI compute milestones. Reject generic blogs or minor app updates.
 
---- CANDIDATE HIGHER EDUCATION & PREMIER INSTITUTES HEADLINES ---
-{json.dumps(edu_candidates, indent=2)}
+--- 2. INDIA EDUCATION SECTOR HEADLINES (TOP 10) ---
+{json.dumps(india_candidates, indent=2)}
+Guidelines:
+- Select exactly the TOP 10 most important headlines covering national education policy, UGC/AICTE reforms, premier institutes (IIT/IIM/IISc/Central Universities), major research discoveries, accreditation, or national higher education initiatives.
+- Reject trivial seat vacancies, local student club events, or routine exam schedules.
 
-CURATION RULES:
-1. TECH & AI:
-   - Select ONLY genuine major developments: New AI model launches (OpenAI, Gemini, Anthropic, DeepSeek, Meta), AI reasoning breakthroughs, major compute/chip milestones, or high-impact frontier AI shifts.
-   - STRICTLY REJECT: Personal lifestyle pieces, opinion blogs, minor consumer gadgets, or trivial fluff.
-2. HIGHER EDUCATION & PREMIER INSTITUTES:
-   - Select ONLY major institutional milestones: Premier institutes (IITs, IISc, MIT, Stanford, Harvard, AIIMS, etc.) developing breakthrough tech/inventions, groundbreaking scientific discoveries, major international research partnerships, or high-impact campus innovations.
-   - STRICTLY REJECT: Routine admission notices, seat vacancies, local student club events, commercial college advertisements/rankings PR, or basic college exams.
+--- 3. WORLD EDUCATION SECTOR HEADLINES (TOP 5) ---
+{json.dumps(world_candidates, indent=2)}
+Guidelines:
+- Select exactly the TOP 5 most significant global education headlines covering top international universities (MIT, Harvard, Oxford, Stanford, etc.), global university rankings, breakthrough university research, or international student/academic policy.
 
-Select 3 to 5 top items for "tech_ai" and 3 to 5 top items for "education".
-For each item:
-- "title": Clean, professional headline (strip out redundant source suffix, fix corrupted characters)
-- "summary": Exactly 1 crisp sentence explaining why this is significant or what was launched/discovered.
-- "source": Publication or institute name
+--- 4. RAJASTHAN EDUCATION HEADLINES (TOP 3 TO 5) ---
+{json.dumps(rajasthan_candidates, indent=2)}
+Guidelines:
+- Select the TOP 3 to 5 education headlines specifically impacting Rajasthan (Rajasthan universities, state education department reforms, schools/colleges in Jaipur/Jodhpur/Kota/Udaipur, IIT Jodhpur, MNIT Jaipur, or state educational initiatives).
+- Reject routine admit card download links or exam form alerts; prioritize policy, infrastructure, university innovations, or major reforms.
+
+For EVERY selected item provide:
+- "title": Clean, professional headline (strip out redundant source suffix, fix any corrupted quotes or characters)
+- "summary": Exactly 1 crisp sentence explaining what makes this significant or what decision was taken.
+- "source": Source publication or institute name
 - "pub_date": Publication time tag
 
 Return strictly valid JSON:
 {{
-  "tech_ai": [
-    {{"title": "...", "summary": "...", "source": "...", "pub_date": "..."}}
-  ],
-  "education": [
-    {{"title": "...", "summary": "...", "source": "...", "pub_date": "..."}}
-  ]
+  "tech_ai": [ ... 4-5 items ... ],
+  "education_india": [ ... 10 items ... ],
+  "education_world": [ ... 5 items ... ],
+  "education_rajasthan": [ ... 3-5 items ... ]
 }}
 """
 
+    headers = {"Content-Type": "application/json"}
     for m in candidate_models:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            res = requests.post(url, json={
+            res = requests.post(url, headers=headers, json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
-            }, timeout=20)
+            }, timeout=25)
 
             if res.status_code == 200:
                 raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                 data = json.loads(raw_text)
-                if "tech_ai" in data and "education" in data:
+                if "education_india" in data and "education_world" in data:
                     print(f"✅ News successfully curated using Gemini ({m}).")
                     return data
-        except Exception as e:
+        except Exception:
             continue
 
     return None
 
-def algorithmic_filter(tech_candidates: List[Dict[str, str]], edu_candidates: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
-    """
-    Intelligent heuristic fallback if Gemini is offline or quota-limited.
-    Scores candidates by breakthrough keywords and eliminates routine admission/PR fluff.
-    """
-    negative_edu = ["vacant", "seat", "admission", "admissions", "hall ticket", "counselling", "club", "fest", "exam date", "timetable"]
-    priority_institutes = ["iit", "iisc", "stanford", "mit", "harvard", "oxford", "aiims", "imperial", "researchers"]
-
-    filtered_edu = []
-    for it in edu_candidates:
-        title_lower = it["title"].lower()
-        if any(neg in title_lower for neg in negative_edu):
-            continue
-        score = 0
-        if any(inst in title_lower for inst in priority_institutes):
-            score += 2
-        if any(kw in title_lower for kw in ["breakthrough", "develops", "discovers", "innovation", "partnership", "launches", "patent"]):
-            score += 2
-        if score > 0:
-            filtered_edu.append({
-                **it,
-                "summary": f"Key institutional milestone involving research, innovation, or technology development."
-            })
-
-    filtered_tech = []
-    priority_tech = ["openai", "gemini", "anthropic", "deepseek", "meta", "nvidia", "model launch", "reasoning"]
-    for it in tech_candidates:
-        title_lower = it["title"].lower()
-        if any(neg in title_lower for neg in ["father of", "parent", "kid", "movie", "how to"]):
-            continue
-        if any(kw in title_lower for kw in priority_tech) or "breakthrough" in title_lower:
-            filtered_tech.append({
-                **it,
-                "summary": f"Major artificial intelligence frontier milestone and technology development."
-            })
+def heuristic_fallback(
+    tech_cands: List[Dict[str, str]],
+    india_cands: List[Dict[str, str]],
+    world_cands: List[Dict[str, str]],
+    raj_cands: List[Dict[str, str]]
+) -> Dict[str, List[Dict[str, str]]]:
+    """Smart heuristic fallback if Gemini is unreachable."""
+    def clean_batch(items, max_n=5, summary_text="Key educational update"):
+        negatives = ["admit card", "hall ticket", "seat vacant", "counselling date", "club"]
+        cleaned = []
+        for it in items:
+            t = it["title"].lower()
+            if not any(neg in t for neg in negatives):
+                cleaned.append({
+                    **it,
+                    "summary": it.get("summary", summary_text)
+                })
+        return cleaned[:max_n] if cleaned else items[:max_n]
 
     return {
-        "tech_ai": filtered_tech[:5] if filtered_tech else tech_candidates[:4],
-        "education": filtered_edu[:5] if filtered_edu else edu_candidates[:4]
+        "tech_ai": clean_batch(tech_cands, 4, "Major AI technology and model milestone."),
+        "education_india": clean_batch(india_cands, 10, "National educational and institutional development in India."),
+        "education_world": clean_batch(world_cands, 5, "Global higher education and international university development."),
+        "education_rajasthan": clean_batch(raj_cands, 5, "Key state-level educational and academic update for Rajasthan.")
     }
 
 def fetch_important_news() -> Dict[str, List[Dict[str, str]]]:
     """
-    Fetches real-time, curated, high-impact headlines for:
-    1. Tech & AI News (New AI model launches, frontier breakthroughs)
-    2. Higher Education & Premier Institutions (Breakthrough discoveries, major tech & partnerships)
+    Fetches real-time, curated, high-impact news across:
+    1. Tech & AI News
+    2. India Higher Education News (Top 10)
+    3. World Higher Education News (Top 5)
+    4. Rajasthan Education News (Top 3-5)
     """
-    print("📰 Fetching real-time candidate headlines for Tech & AI...")
+    print("📰 Fetching candidate headlines for Tech & AI...")
     tech_queries = [
         '(AI model launch OR new AI model OR OpenAI OR Anthropic OR DeepSeek OR "Google Gemini" OR "AI breakthrough") when:3d',
         '(frontier AI OR "AI reasoning" OR "autonomous agent" OR "NVIDIA AI") when:3d'
     ]
-    tech_candidates = []
+    tech_cands = []
     for q in tech_queries:
-        tech_candidates.extend(fetch_rss_candidates(q, max_items=10))
+        tech_cands.extend(fetch_rss_candidates(q, max_items=10))
 
-    print("🎓 Fetching real-time candidate headlines for Higher Education & Premier Institutes...")
-    edu_queries = [
-        '(IIT OR IISc OR Stanford OR MIT OR AIIMS OR "premier institute") (breakthrough OR develops OR discovers OR innovation OR "launches AI") when:7d',
-        '("university researchers" OR "premier university") (breakthrough OR "develops new" OR "discovers" OR "patent" OR "partnership") when:7d'
+    print("🇮🇳 Fetching candidate headlines for India Education (Top 10)...")
+    india_queries = [
+        '(UGC OR AICTE OR "higher education" OR IIT OR IIM OR "NEP 2020") (reform OR research OR policy OR innovation OR ranking OR grant) when:5d',
+        '("Ministry of Education" OR "university grant" OR "autonomous college" OR "accreditation") India when:5d'
     ]
-    edu_candidates = []
-    for q in edu_queries:
-        edu_candidates.extend(fetch_rss_candidates(q, max_items=10))
+    india_cands = []
+    for q in india_queries:
+        india_cands.extend(fetch_rss_candidates(q, max_items=15))
 
-    tech_candidates = deduplicate_items(tech_candidates)
-    edu_candidates = deduplicate_items(edu_candidates)
+    print("🌍 Fetching candidate headlines for World Education (Top 5)...")
+    world_queries = [
+        '("higher education" OR "world university" OR "global universities" OR MIT OR Harvard OR Oxford OR Stanford OR Cambridge) (breakthrough OR research OR ranking OR discovery OR policy) when:7d',
+        '("Times Higher Education" OR "QS World University" OR "international students" OR "global academia") when:7d'
+    ]
+    world_cands = []
+    for q in world_queries:
+        world_cands.extend(fetch_rss_candidates(q, max_items=15, hl="en-US", gl="US", ceid="US:en"))
+
+    print("🏰 Fetching candidate headlines for Rajasthan Education...")
+    raj_queries = [
+        'Rajasthan (university OR college OR "higher education" OR "school education" OR "education minister" OR "MNIT Jaipur" OR "IIT Jodhpur" OR "RU Jaipur") when:7d',
+        '(Jaipur OR Jodhpur OR Kota OR Udaipur OR Bikaner) (university OR college OR "education department" OR "school infrastructure") when:7d'
+    ]
+    raj_cands = []
+    for q in raj_queries:
+        raj_cands.extend(fetch_rss_candidates(q, max_items=15))
+
+    tech_cands = deduplicate_items(tech_cands)
+    india_cands = deduplicate_items(india_cands)
+    world_cands = deduplicate_items(world_cands)
+    raj_cands = deduplicate_items(raj_cands)
 
     api_key = os.getenv("GEMINI_API_KEY")
     curated = None
     if api_key and api_key != "your_gemini_api_key_here":
         print("🧠 Passing candidates through Gemini intelligence curator...")
-        curated = curate_news_with_gemini(tech_candidates, edu_candidates, api_key)
+        curated = curate_all_news_with_gemini(tech_cands, india_cands, world_cands, raj_cands, api_key)
 
     if not curated:
-        print("⚡ Using high-precision keyword curation filter...")
-        curated = algorithmic_filter(tech_candidates, edu_candidates)
+        print("⚡ Using high-precision keyword curation fallback...")
+        curated = heuristic_fallback(tech_cands, india_cands, world_cands, raj_cands)
+
+    # Maintain backward compatibility with 'education' key
+    if "education" not in curated:
+        curated["education"] = curated.get("education_india", [])
 
     return curated
 
@@ -222,20 +244,39 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     news = fetch_important_news()
-    print("\n" + "="*60)
-    print("🤖 TECH & AI NEWS (High-Impact & Breakthroughs):")
-    print("="*60)
+
+    print("\n" + "="*70)
+    print("🤖 TECH & AI NEWS (Breakthroughs & Model Launches):")
+    print("="*70)
     for idx, item in enumerate(news.get("tech_ai", []), 1):
         print(f"\n{idx}. ⚡ {item.get('title')}")
         if item.get("summary"):
             print(f"   💡 {item.get('summary')}")
         print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
 
-    print("\n" + "="*60)
-    print("🏛️ HIGHER EDUCATION & INSTITUTES (Breakthroughs & Milestones):")
-    print("="*60)
-    for idx, item in enumerate(news.get("education", []), 1):
+    print("\n" + "="*70)
+    print("🇮🇳 TOP 10 INDIA EDUCATION SECTOR NEWS:")
+    print("="*70)
+    for idx, item in enumerate(news.get("education_india", []), 1):
         print(f"\n{idx}. 🎓 {item.get('title')}")
+        if item.get("summary"):
+            print(f"   💡 {item.get('summary')}")
+        print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
+
+    print("\n" + "="*70)
+    print("🌍 TOP 5 WORLD EDUCATION SECTOR NEWS:")
+    print("="*70)
+    for idx, item in enumerate(news.get("education_world", []), 1):
+        print(f"\n{idx}. 🌐 {item.get('title')}")
+        if item.get("summary"):
+            print(f"   💡 {item.get('summary')}")
+        print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
+
+    print("\n" + "="*70)
+    print("🏰 TOP RAJASTHAN EDUCATION NEWS:")
+    print("="*70)
+    for idx, item in enumerate(news.get("education_rajasthan", []), 1):
+        print(f"\n{idx}. 🏛️ {item.get('title')}")
         if item.get("summary"):
             print(f"   💡 {item.get('summary')}")
         print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
