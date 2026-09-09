@@ -185,42 +185,6 @@ def generate_digest_pdf(
 
     story.append(Spacer(1, 10))
 
-    # 3. Section: Tech & AI News
-    story.append(Paragraph("🤖 TOP TECH & ARTIFICIAL INTELLIGENCE NEWS", section_title_style))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
-
-    tech_items = news.get("tech_ai", [])
-    if tech_items:
-        tech_table = []
-        for n in tech_items[:5]:
-            title = n.get("title", "")
-            summary = n.get("summary", "")
-            source = n.get("source", "Tech Wire")
-            time_tag = n.get("pub_date", "Today")
-            cell_content = [
-                Paragraph(f"• <b>{title}</b>", item_title_style)
-            ]
-            if summary:
-                cell_content.append(Paragraph(f"<font color='#1E293B' size='8.5'>{summary}</font>", item_body_style))
-            cell_content.append(Paragraph(f"<font color='#64748B' size='7.5'>Source: {source}  |  {time_tag}</font>", item_body_style))
-            tech_table.append([cell_content])
-
-        t_tech = Table(tech_table, colWidths=[7.2 * inch])
-        t_tech.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F0FDF4')),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#BBF7D0')),
-            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#DCFCE7')),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        story.append(t_tech)
-    else:
-        story.append(Paragraph("<i>No new tech headlines available.</i>", item_body_style))
-
-    story.append(Spacer(1, 12))
-
     # Helper function to create news table
     def build_news_table(items, bg_color='#EFF6FF', border_color='#BFDBFE', grid_color='#DBEAFE'):
         table_rows = []
@@ -249,9 +213,20 @@ def generate_digest_pdf(
         ]))
         return t
 
-    # 4. Section: India Higher Education (Top 10)
+    # 3. Section: Tech & AI News
+    story.append(Paragraph("🤖 TECH & ARTIFICIAL INTELLIGENCE DEVELOPMENTS (1-DAY PREVIOUS LOOKBACK)", section_title_style))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
+
+    tech_items = news.get("tech_ai", [])
+    if tech_items:
+        story.append(build_news_table(tech_items[:5], bg_color='#F0FDF4', border_color='#BBF7D0', grid_color='#DCFCE7'))
+    else:
+        story.append(Paragraph("<i>No new tech headlines available.</i>", item_body_style))
+
     story.append(Spacer(1, 12))
-    story.append(Paragraph("🇮🇳 HIGHER EDUCATION & INSTITUTES (INDIA - TOP 10)", section_title_style))
+
+    # 4. Section: India Higher Education (Top 10)
+    story.append(Paragraph("🇮🇳 HIGHER EDUCATION & INSTITUTES (INDIA - TOP 10 | 1-DAY PREVIOUS)", section_title_style))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
 
     india_items = news.get("education_india", news.get("education", []))
@@ -264,7 +239,7 @@ def generate_digest_pdf(
     world_items = news.get("education_world", [])
     if world_items:
         story.append(Spacer(1, 12))
-        story.append(Paragraph("🌍 GLOBAL HIGHER EDUCATION & UNIVERSITIES (WORLD - TOP 5)", section_title_style))
+        story.append(Paragraph("🌍 GLOBAL HIGHER EDUCATION & UNIVERSITIES (WORLD - TOP 5 | 1-DAY PREVIOUS)", section_title_style))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
         story.append(build_news_table(world_items[:5], bg_color='#F8FAFC', border_color='#CBD5E1', grid_color='#E2E8F0'))
 
@@ -272,7 +247,7 @@ def generate_digest_pdf(
     raj_items = news.get("education_rajasthan", [])
     if raj_items:
         story.append(Spacer(1, 12))
-        story.append(Paragraph("🏰 RAJASTHAN HIGHER EDUCATION & STATE UPDATES", section_title_style))
+        story.append(Paragraph("🏰 RAJASTHAN HIGHER EDUCATION & STATE UPDATES (1-DAY PREVIOUS)", section_title_style))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
         story.append(build_news_table(raj_items[:5], bg_color='#FFFBEB', border_color='#FDE68A', grid_color='#FEF3C7'))
 

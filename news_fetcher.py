@@ -5,6 +5,8 @@ import json
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 from typing import List, Dict, Any
 
 if sys.platform == "win32":
@@ -14,11 +16,20 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-def fetch_rss_candidates(query: str, max_items: int = 15, hl: str = "en-IN", gl: str = "IN", ceid: str = "IN:en") -> List[Dict[str, str]]:
+def fetch_rss_candidates(
+    query: str, 
+    max_items: int = 20, 
+    max_lookback_hours: int = 48,
+    hl: str = "en-IN", 
+    gl: str = "IN", 
+    ceid: str = "IN:en"
+) -> List[Dict[str, str]]:
     """
-    Fetches raw news candidates from Google News RSS feed for a targeted query.
+    Fetches raw news candidates from Google News RSS feed for a targeted query,
+    enforcing a strict recency filter (1 day previous / last 24-48 hours).
     100% free, requires no API key.
     """
+    now = datetime.now()
     encoded_query = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl={hl}&gl={gl}&ceid={ceid}"
 
@@ -33,11 +44,23 @@ def fetch_rss_candidates(query: str, max_items: int = 15, hl: str = "en-IN", gl:
             xml_data = response.read()
             root = ET.fromstring(xml_data)
 
-            for item in root.findall(".//item")[:max_items]:
+            for item in root.findall(".//item"):
                 raw_title = item.findtext("title", "")
                 link = item.findtext("link", "")
-                pub_date = item.findtext("pubDate", "")
+                pub_date_raw = item.findtext("pubDate", "")
                 source = item.findtext("source", "")
+
+                # Parse and verify recency (1 day previous / <= 48 hours)
+                pub_formatted = "Recent"
+                if pub_date_raw:
+                    try:
+                        pub_dt = parsedate_to_datetime(pub_date_raw).replace(tzinfo=None)
+                        age_hours = (now - pub_dt).total_seconds() / 3600
+                        if age_hours > max_lookback_hours:
+                            continue  # Exclude news older than 1-2 days
+                        pub_formatted = pub_dt.strftime("%a, %d %b %Y")
+                    except Exception:
+                        pub_formatted = pub_date_raw[:16]
 
                 cleaned_title = raw_title
                 detected_source = source
@@ -51,9 +74,11 @@ def fetch_rss_candidates(query: str, max_items: int = 15, hl: str = "en-IN", gl:
                     items.append({
                         "title": cleaned_title,
                         "source": detected_source or "News Desk",
-                        "pub_date": pub_date[:16] if pub_date else "Recent",
+                        "pub_date": pub_formatted,
                         "link": link
                     })
+                    if len(items) >= max_items:
+                        break
     except Exception as e:
         print(f"⚠️ Warning: Could not fetch RSS headlines for '{query}': {e}")
 
@@ -78,19 +103,25 @@ def curate_all_news_with_gemini(
     api_key: str
 ) -> Dict[str, List[Dict[str, str]]]:
     """
-    Uses Google Gemini with model fallback to curate:
+    Uses Google Gemini with multi-model fallback to curate:
     1. Top Tech & AI news (4-5 items)
-    2. Top 10 India Education news
-    3. Top 5 World Education news
-    4. Top Rajasthan Education news (3-5 items)
+    2. Top 10 India Education news (strictly 1 day previous / last 24-48h)
+    3. Top 5 World Education news (strictly 1 day previous / last 24-48h)
+    4. Top Rajasthan Education news (3-5 items, strictly 1 day previous / last 24-48h)
     """
     import requests
+
+    now = datetime.now()
+    yesterday = now - timedelta(days=1)
+    target_date_str = yesterday.strftime("%A, %d %B %Y")
 
     candidate_models = ["gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.6-flash"]
 
     prompt = f"""
 You are an executive intelligence director curating high-impact briefings for university leadership and education executives.
-Analyze the candidate headlines below and curate them into 4 distinct, high-value sections:
+Target Reference Date: 1 Day Previous ({target_date_str}).
+
+Analyze the candidate real-time headlines below and curate them into 4 distinct, high-value sections:
 
 --- 1. TECH & AI HEADLINES ---
 {json.dumps(tech_candidates, indent=2)}
@@ -114,11 +145,14 @@ Guidelines:
 - Select the TOP 3 to 5 education headlines specifically impacting Rajasthan (Rajasthan universities, state education department reforms, schools/colleges in Jaipur/Jodhpur/Kota/Udaipur, IIT Jodhpur, MNIT Jaipur, or state educational initiatives).
 - Reject routine admit card download links or exam form alerts; prioritize policy, infrastructure, university innovations, or major reforms.
 
+CRITICAL RECENCY INSTRUCTION:
+- All selected news must strictly reflect the 1-day previous / past 24-48 hours window.
+
 For EVERY selected item provide:
 - "title": Clean, professional headline (strip out redundant source suffix, fix any corrupted quotes or characters)
 - "summary": Exactly 1 crisp sentence explaining what makes this significant or what decision was taken.
 - "source": Source publication or institute name
-- "pub_date": Publication time tag
+- "pub_date": Clean publication date (e.g. {yesterday.strftime('%a, %d %b %Y')})
 
 Return strictly valid JSON:
 {{
@@ -169,55 +203,61 @@ def heuristic_fallback(
         return cleaned[:max_n] if cleaned else items[:max_n]
 
     return {
-        "tech_ai": clean_batch(tech_cands, 4, "Major AI technology and model milestone."),
-        "education_india": clean_batch(india_cands, 10, "National educational and institutional development in India."),
-        "education_world": clean_batch(world_cands, 5, "Global higher education and international university development."),
-        "education_rajasthan": clean_batch(raj_cands, 5, "Key state-level educational and academic update for Rajasthan.")
+        "tech_ai": clean_batch(tech_cands, 4, "Major AI technology and model milestone from past 24-48 hours."),
+        "education_india": clean_batch(india_cands, 10, "National educational and institutional development in India from past 24-48 hours."),
+        "education_world": clean_batch(world_cands, 5, "Global higher education and international university development from past 24-48 hours."),
+        "education_rajasthan": clean_batch(raj_cands, 5, "Key state-level educational and academic update for Rajasthan from past 24-48 hours.")
     }
 
 def fetch_important_news() -> Dict[str, List[Dict[str, str]]]:
     """
-    Fetches real-time, curated, high-impact news across:
+    Fetches real-time, curated, high-impact news strictly from 1 day previous (last 24-48 hours) across:
     1. Tech & AI News
     2. India Higher Education News (Top 10)
     3. World Higher Education News (Top 5)
     4. Rajasthan Education News (Top 3-5)
     """
-    print("📰 Fetching candidate headlines for Tech & AI...")
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+
+    print("📰 Fetching 1-day previous candidate headlines for Tech & AI...")
     tech_queries = [
-        '(AI model launch OR new AI model OR OpenAI OR Anthropic OR DeepSeek OR "Google Gemini" OR "AI breakthrough") when:3d',
-        '(frontier AI OR "AI reasoning" OR "autonomous agent" OR "NVIDIA AI") when:3d'
+        '(AI model launch OR new AI model OR OpenAI OR Anthropic OR DeepSeek OR "Google Gemini" OR "AI breakthrough") when:2d',
+        '(frontier AI OR "AI reasoning" OR "autonomous agent" OR "NVIDIA AI") when:2d'
     ]
     tech_cands = []
     for q in tech_queries:
-        tech_cands.extend(fetch_rss_candidates(q, max_items=10))
+        tech_cands.extend(fetch_rss_candidates(q, max_items=15, max_lookback_hours=48))
 
-    print("🇮🇳 Fetching candidate headlines for India Education (Top 10)...")
+    print("🇮🇳 Fetching 1-day previous candidate headlines for India Education (Top 10)...")
     india_queries = [
-        '(UGC OR AICTE OR "higher education" OR IIT OR IIM OR "NEP 2020") (reform OR research OR policy OR innovation OR ranking OR grant) when:5d',
-        '("Ministry of Education" OR "university grant" OR "autonomous college" OR "accreditation") India when:5d'
+        '(UGC OR AICTE OR "higher education" OR IIT OR IIM OR "NEP 2020") (reform OR research OR policy OR innovation OR ranking OR grant) when:2d',
+        '("Ministry of Education" OR "university grant" OR "autonomous college" OR "accreditation") India when:2d'
     ]
     india_cands = []
     for q in india_queries:
-        india_cands.extend(fetch_rss_candidates(q, max_items=15))
+        india_cands.extend(fetch_rss_candidates(q, max_items=20, max_lookback_hours=48))
 
-    print("🌍 Fetching candidate headlines for World Education (Top 5)...")
+    print("🌍 Fetching 1-day previous candidate headlines for World Education (Top 5)...")
     world_queries = [
-        '("higher education" OR "world university" OR "global universities" OR MIT OR Harvard OR Oxford OR Stanford OR Cambridge) (breakthrough OR research OR ranking OR discovery OR policy) when:7d',
-        '("Times Higher Education" OR "QS World University" OR "international students" OR "global academia") when:7d'
+        '("higher education" OR "world university" OR "global universities" OR MIT OR Harvard OR Oxford OR Stanford OR Cambridge) (breakthrough OR research OR ranking OR discovery OR policy) when:2d',
+        '("Times Higher Education" OR "QS World University" OR "international students" OR "global academia") when:2d'
     ]
     world_cands = []
     for q in world_queries:
-        world_cands.extend(fetch_rss_candidates(q, max_items=15, hl="en-US", gl="US", ceid="US:en"))
+        world_cands.extend(fetch_rss_candidates(q, max_items=20, max_lookback_hours=48, hl="en-US", gl="US", ceid="US:en"))
 
-    print("🏰 Fetching candidate headlines for Rajasthan Education...")
+    print("🏰 Fetching 1-day previous candidate headlines for Rajasthan Education...")
     raj_queries = [
-        'Rajasthan (university OR college OR "higher education" OR "school education" OR "education minister" OR "MNIT Jaipur" OR "IIT Jodhpur" OR "RU Jaipur") when:7d',
-        '(Jaipur OR Jodhpur OR Kota OR Udaipur OR Bikaner) (university OR college OR "education department" OR "school infrastructure") when:7d'
+        'Rajasthan (university OR college OR "higher education" OR "school education" OR "education minister" OR "MNIT Jaipur" OR "IIT Jodhpur" OR "RU Jaipur") when:2d',
+        '(Jaipur OR Jodhpur OR Kota OR Udaipur OR Bikaner) (university OR college OR "education department" OR "school infrastructure") when:2d'
     ]
     raj_cands = []
     for q in raj_queries:
-        raj_cands.extend(fetch_rss_candidates(q, max_items=15))
+        raj_cands.extend(fetch_rss_candidates(q, max_items=20, max_lookback_hours=48))
 
     tech_cands = deduplicate_items(tech_cands)
     india_cands = deduplicate_items(india_cands)
@@ -227,7 +267,7 @@ def fetch_important_news() -> Dict[str, List[Dict[str, str]]]:
     api_key = os.getenv("GEMINI_API_KEY")
     curated = None
     if api_key and api_key != "your_gemini_api_key_here":
-        print("🧠 Passing candidates through Gemini intelligence curator...")
+        print("🧠 Passing 1-day previous candidates through Gemini intelligence curator...")
         curated = curate_all_news_with_gemini(tech_cands, india_cands, world_cands, raj_cands, api_key)
 
     if not curated:
@@ -246,7 +286,7 @@ if __name__ == "__main__":
     news = fetch_important_news()
 
     print("\n" + "="*70)
-    print("🤖 TECH & AI NEWS (Breakthroughs & Model Launches):")
+    print("🤖 TECH & AI NEWS (1-Day Previous Breakthroughs & Launches):")
     print("="*70)
     for idx, item in enumerate(news.get("tech_ai", []), 1):
         print(f"\n{idx}. ⚡ {item.get('title')}")
@@ -255,7 +295,7 @@ if __name__ == "__main__":
         print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
 
     print("\n" + "="*70)
-    print("🇮🇳 TOP 10 INDIA EDUCATION SECTOR NEWS:")
+    print("🇮🇳 TOP 10 INDIA EDUCATION SECTOR NEWS (1-Day Previous):")
     print("="*70)
     for idx, item in enumerate(news.get("education_india", []), 1):
         print(f"\n{idx}. 🎓 {item.get('title')}")
@@ -264,7 +304,7 @@ if __name__ == "__main__":
         print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
 
     print("\n" + "="*70)
-    print("🌍 TOP 5 WORLD EDUCATION SECTOR NEWS:")
+    print("🌍 TOP 5 WORLD EDUCATION SECTOR NEWS (1-Day Previous):")
     print("="*70)
     for idx, item in enumerate(news.get("education_world", []), 1):
         print(f"\n{idx}. 🌐 {item.get('title')}")
@@ -273,7 +313,7 @@ if __name__ == "__main__":
         print(f"   📰 {item.get('source')} | {item.get('pub_date')}")
 
     print("\n" + "="*70)
-    print("🏰 TOP RAJASTHAN EDUCATION NEWS:")
+    print("🏰 TOP RAJASTHAN EDUCATION NEWS (1-Day Previous):")
     print("="*70)
     for idx, item in enumerate(news.get("education_rajasthan", []), 1):
         print(f"\n{idx}. 🏛️ {item.get('title')}")
