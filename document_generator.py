@@ -1,5 +1,8 @@
 import os
 import sys
+import re
+import html
+import unicodedata
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -8,8 +11,10 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 )
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 if sys.platform == "win32":
     try:
@@ -17,6 +22,81 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+# Register Arial if available on Windows for enhanced unicode character coverage
+DEFAULT_FONT = "Helvetica"
+DEFAULT_FONT_BOLD = "Helvetica-Bold"
+DEFAULT_FONT_ITALIC = "Helvetica-Oblique"
+
+if os.name == "nt":
+    arial_path = "C:/Windows/Fonts/arial.ttf"
+    arial_bd_path = "C:/Windows/Fonts/arialbd.ttf"
+    arial_i_path = "C:/Windows/Fonts/ariali.ttf"
+    if os.path.exists(arial_path) and os.path.exists(arial_bd_path):
+        try:
+            pdfmetrics.registerFont(TTFont("Arial", arial_path))
+            pdfmetrics.registerFont(TTFont("Arial-Bold", arial_bd_path))
+            if os.path.exists(arial_i_path):
+                pdfmetrics.registerFont(TTFont("Arial-Italic", arial_i_path))
+            DEFAULT_FONT = "Arial"
+            DEFAULT_FONT_BOLD = "Arial-Bold"
+            DEFAULT_FONT_ITALIC = "Arial-Italic" if os.path.exists(arial_i_path) else "Arial"
+        except Exception:
+            pass
+
+def clean_pdf_text(text: str) -> str:
+    """
+    Cleans and prepares text for safe rendering in ReportLab Paragraphs:
+    - Strips zero-width, invisible, and format control unicode characters.
+    - Strips emojis and pictographic symbols (which render as black boxes).
+    - Normalizes punctuation and replaces typographics (smart quotes, em-dashes).
+    - XML-escapes special characters (&, <, >).
+    """
+    if not text:
+        return ""
+    
+    # 1. Unescape existing HTML entities
+    text = html.unescape(str(text))
+    
+    # 2. Strip invisible/zero-width characters & BOM
+    text = re.sub(r'[\u200B-\u200F\uFEFF\u034F\u00AD\u2060\u180E\uFFF9-\uFFFB\u2028\u2029]', '', text)
+    
+    # 3. Strip URLs and raw tracking tokens/parameters
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'\b(?:qs=)?[A-Za-z0-9_\-=+]{25,}\b', '', text)
+
+    # 4. Replace typographic symbols with standard ASCII equivalents
+    replacements = {
+        '—': '-',
+        '–': '-',
+        '“': '"',
+        '”': '"',
+        '‘': "'",
+        '’': "'",
+        '…': '...',
+        '•': '-',
+        '™': '(TM)',
+        '®': '(R)',
+        '©': '(C)',
+        '\u00a0': ' ',
+    }
+    for orig, rep in replacements.items():
+        text = text.replace(orig, rep)
+
+    # 5. Remove emojis and miscellaneous symbols (Unicode blocks: Emoticons, Symbols, Pictographs, etc.)
+    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    text = re.sub(r'[\u2600-\u27bf]', '', text)
+    
+    # 6. Remove long divider repeats like --------, =======, etc.
+    text = re.sub(r'[-_=~*.]{4,}', ' ', text)
+    
+    # 7. Normalize whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # 8. XML-escape special characters (&, <, >)
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
+    return text
 
 def format_time_stamp(iso_or_str: str) -> str:
     if not iso_or_str:
@@ -31,7 +111,8 @@ def generate_digest_pdf(
     emails: List[Dict[str, Any]],
     news: Dict[str, List[Dict[str, str]]],
     output_path: str = None,
-    digest_date_str: str = None
+    digest_date_str: str = None,
+    file_date_str: str = None
 ) -> str:
     """
     Generates an executive briefing PDF report containing:
@@ -39,7 +120,7 @@ def generate_digest_pdf(
     2. Important Tech & AI News Headlines
     3. Important Higher Education & University News Headlines
     """
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    date_tag = file_date_str or datetime.now().strftime("%Y-%m-%d")
     if not digest_date_str:
         digest_date_str = datetime.now().strftime("%A, %B %d, %Y")
 
@@ -47,7 +128,7 @@ def generate_digest_pdf(
         base_dir = os.path.dirname(os.path.abspath(__file__))
         reports_dir = os.path.join(base_dir, "reports")
         os.makedirs(reports_dir, exist_ok=True)
-        output_path = os.path.join(reports_dir, f"Daily_Executive_Digest_{today_str}.pdf")
+        output_path = os.path.join(reports_dir, f"Daily_Executive_Digest_{date_tag}.pdf")
     else:
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -62,40 +143,40 @@ def generate_digest_pdf(
 
     styles = getSampleStyleSheet()
 
-    # Custom styles
+    # Custom styles using registered safe font
     header_style = ParagraphStyle(
         'DocHeader',
         parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=20,
-        leading=24,
-        textColor=colors.HexColor('#1E293B')
+        fontName=DEFAULT_FONT_BOLD,
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor('#0F172A')
     )
     
     sub_header_style = ParagraphStyle(
         'DocSubHeader',
         parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=11,
-        leading=14,
-        textColor=colors.HexColor('#64748B')
+        fontName=DEFAULT_FONT,
+        fontSize=10,
+        leading=13,
+        textColor=colors.HexColor('#475569')
     )
 
     section_title_style = ParagraphStyle(
         'SectionTitle',
         parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=13,
-        leading=16,
-        textColor=colors.HexColor('#0F172A'),
+        fontName=DEFAULT_FONT_BOLD,
+        fontSize=12,
+        leading=15,
+        textColor=colors.HexColor('#1E293B'),
         spaceBefore=10,
-        spaceAfter=6
+        spaceAfter=4
     )
 
     category_header_style = ParagraphStyle(
         'CategoryHeader',
         parent=styles['Normal'],
-        fontName='Helvetica-Bold',
+        fontName=DEFAULT_FONT_BOLD,
         fontSize=10,
         leading=13,
         textColor=colors.HexColor('#2563EB')
@@ -104,7 +185,7 @@ def generate_digest_pdf(
     item_title_style = ParagraphStyle(
         'ItemTitle',
         parent=styles['Normal'],
-        fontName='Helvetica-Bold',
+        fontName=DEFAULT_FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1E293B')
@@ -113,7 +194,7 @@ def generate_digest_pdf(
     item_body_style = ParagraphStyle(
         'ItemBody',
         parent=styles['Normal'],
-        fontName='Helvetica',
+        fontName=DEFAULT_FONT,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#334155')
@@ -122,7 +203,7 @@ def generate_digest_pdf(
     badge_style = ParagraphStyle(
         'Badge',
         parent=styles['Normal'],
-        fontName='Helvetica-Bold',
+        fontName=DEFAULT_FONT_BOLD,
         fontSize=8,
         leading=10,
         textColor=colors.HexColor('#DC2626')
@@ -130,15 +211,21 @@ def generate_digest_pdf(
 
     story = []
 
-    # 1. Header Banner
-    story.append(Paragraph("🏛️ EXECUTIVE BRIEFING & EMAIL DIGEST", header_style))
+    # 1. Header Banner (Clean Typography without emojis)
+    story.append(Paragraph("EXECUTIVE BRIEFING &amp; EMAIL DIGEST", header_style))
     story.append(Spacer(1, 4))
-    story.append(Paragraph(f"📅 <b>Date:</b> {digest_date_str}  |  📬 <b>Inbound Emails:</b> {len(emails)}  |  🤖 <b>AI Analysis Active</b>", sub_header_style))
+    
+    meta_text = (
+        f"<b>Date:</b> {clean_pdf_text(digest_date_str)}  |  "
+        f"<b>Inbound Emails:</b> {len(emails)}  |  "
+        f"<b>AI Status:</b> Active Intelligence Report"
+    )
+    story.append(Paragraph(meta_text, sub_header_style))
     story.append(Spacer(1, 8))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563EB'), spaceBefore=2, spaceAfter=10))
 
     # 2. Section: Inbound Email Highlights
-    story.append(Paragraph("📬 INBOUND EMAIL ACTION SUMMARIES", section_title_style))
+    story.append(Paragraph("INBOUND EMAIL ACTION SUMMARIES", section_title_style))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
 
     if not emails:
@@ -155,15 +242,16 @@ def generate_digest_pdf(
             is_urgent = cat_name.lower() in ["urgent", "action required"]
             cat_color = colors.HexColor('#DC2626') if is_urgent else colors.HexColor('#1D4ED8')
             
-            cat_header = Paragraph(f"<b>{cat_name.upper()} ({len(items)})</b>", ParagraphStyle('CatStyle', parent=category_header_style, textColor=cat_color))
+            clean_cat = clean_pdf_text(cat_name).upper()
+            cat_header = Paragraph(f"<b>{clean_cat} ({len(items)})</b>", ParagraphStyle('CatStyle', parent=category_header_style, textColor=cat_color))
             story.append(cat_header)
             story.append(Spacer(1, 4))
 
             table_data = []
             for item in items:
-                time_str = format_time_stamp(item.get("timestamp", ""))
-                sender_name = item.get("sender_name") or item.get("sender") or "Unknown"
-                summary = item.get("summary") or item.get("subject") or "No description."
+                time_str = clean_pdf_text(format_time_stamp(item.get("timestamp", "")))
+                sender_name = clean_pdf_text(item.get("sender_name") or item.get("sender") or "Unknown")
+                summary = clean_pdf_text(item.get("summary") or item.get("subject") or "No description.")
 
                 content = [
                     Paragraph(f"<b>{time_str} {sender_name}:</b> {summary}", item_body_style)
@@ -189,12 +277,13 @@ def generate_digest_pdf(
     def build_news_table(items, bg_color='#EFF6FF', border_color='#BFDBFE', grid_color='#DBEAFE'):
         table_rows = []
         for n in items:
-            title = n.get("title", "")
-            summary = n.get("summary", "")
-            source = n.get("source", "News Desk")
-            time_tag = n.get("pub_date", "Today")
+            title = clean_pdf_text(n.get("title", ""))
+            summary = clean_pdf_text(n.get("summary", ""))
+            source = clean_pdf_text(n.get("source", "News Desk"))
+            time_tag = clean_pdf_text(n.get("pub_date", "Today"))
+            
             cell_content = [
-                Paragraph(f"• <b>{title}</b>", item_title_style)
+                Paragraph(f"<b>{title}</b>", item_title_style)
             ]
             if summary:
                 cell_content.append(Paragraph(f"<font color='#1E293B' size='8.5'>{summary}</font>", item_body_style))
@@ -214,7 +303,7 @@ def generate_digest_pdf(
         return t
 
     # 3. Section: Tech & AI News
-    story.append(Paragraph("🤖 TECH & ARTIFICIAL INTELLIGENCE DEVELOPMENTS (1-DAY PREVIOUS LOOKBACK)", section_title_style))
+    story.append(Paragraph("TECH &amp; ARTIFICIAL INTELLIGENCE DEVELOPMENTS (1-DAY LOOKBACK)", section_title_style))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
 
     tech_items = news.get("tech_ai", [])
@@ -226,7 +315,7 @@ def generate_digest_pdf(
     story.append(Spacer(1, 12))
 
     # 4. Section: India Higher Education (Top 10)
-    story.append(Paragraph("🇮🇳 HIGHER EDUCATION & INSTITUTES (INDIA - TOP 10 | 1-DAY PREVIOUS)", section_title_style))
+    story.append(Paragraph("HIGHER EDUCATION &amp; INSTITUTES (INDIA - TOP 10 | 1-DAY LOOKBACK)", section_title_style))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
 
     india_items = news.get("education_india", news.get("education", []))
@@ -239,7 +328,7 @@ def generate_digest_pdf(
     world_items = news.get("education_world", [])
     if world_items:
         story.append(Spacer(1, 12))
-        story.append(Paragraph("🌍 GLOBAL HIGHER EDUCATION & UNIVERSITIES (WORLD - TOP 5 | 1-DAY PREVIOUS)", section_title_style))
+        story.append(Paragraph("GLOBAL HIGHER EDUCATION &amp; UNIVERSITIES (WORLD - TOP 5 | 1-DAY LOOKBACK)", section_title_style))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
         story.append(build_news_table(world_items[:5], bg_color='#F8FAFC', border_color='#CBD5E1', grid_color='#E2E8F0'))
 
@@ -247,13 +336,13 @@ def generate_digest_pdf(
     raj_items = news.get("education_rajasthan", [])
     if raj_items:
         story.append(Spacer(1, 12))
-        story.append(Paragraph("🏰 RAJASTHAN HIGHER EDUCATION & STATE UPDATES (1-DAY PREVIOUS)", section_title_style))
+        story.append(Paragraph("RAJASTHAN HIGHER EDUCATION &amp; STATE UPDATES (1-DAY LOOKBACK)", section_title_style))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
         story.append(build_news_table(raj_items[:5], bg_color='#FFFBEB', border_color='#FDE68A', grid_color='#FEF3C7'))
 
     story.append(Spacer(1, 14))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#E2E8F0'), spaceBefore=5, spaceAfter=5))
-    story.append(Paragraph("<font color='#94A3B8' size='8'>Generated automatically by Dean Email Automation & Executive Assistant Suite.</font>", ParagraphStyle('Footer', parent=styles['Normal'], alignment=1)))
+    story.append(Paragraph("<font color='#94A3B8' size='8'>Generated automatically by Dean Email Automation &amp; Executive Assistant Suite.</font>", ParagraphStyle('Footer', parent=styles['Normal'], alignment=1)))
 
     doc.build(story)
     print(f"📄 PDF Executive Briefing successfully generated: {output_path}")

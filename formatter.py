@@ -26,20 +26,23 @@ def get_category_icon(category_name: str) -> str:
         return "🏛️"
     return "📁"
 
-def format_time_stamp(iso_or_datetime_str: str) -> str:
-    """Format an ISO timestamp or date string into clean 12-hour format e.g. [09:42 AM]"""
+def format_time_stamp(iso_or_datetime_str: str, include_date: bool = False) -> str:
+    """Format an ISO timestamp or date string into clean format e.g. [09:42 AM] or [18 Aug 09:42 AM]"""
     if not iso_or_datetime_str:
         return "[--:--]"
     try:
         dt = datetime.fromisoformat(iso_or_datetime_str.replace("Z", "+00:00"))
+        if include_date:
+            return dt.strftime("[%d %b %I:%M %p]")
         return dt.strftime("[%I:%M %p]")
     except Exception:
-        return f"[{iso_or_datetime_str[:8]}]"
+        return f"[{iso_or_datetime_str[:10]}]"
 
 def build_whatsapp_digest(
     emails: List[Dict[str, Any]], 
     college_name: str = "Executive Inbox Monitor",
-    digest_date_str: str = None
+    digest_date_str: str = None,
+    include_date_in_timestamp: bool = False
 ) -> str:
     """
     Constructs a clean, emoji-rich WhatsApp digest message from classified emails.
@@ -95,7 +98,7 @@ def build_whatsapp_digest(
     if urgent_items:
         lines.append("🚨 *ACTION REQUIRED / URGENT:*")
         for item in urgent_items:
-            time_str = format_time_stamp(item.get("timestamp", ""))
+            time_str = format_time_stamp(item.get("timestamp", ""), include_date=include_date_in_timestamp)
             sender = item.get("sender_name") or item.get("sender", "Unknown")
             summary = item.get("summary", "No summary provided")
             lines.append(f"• *{time_str}* *{sender}*: {summary}")
@@ -108,7 +111,7 @@ def build_whatsapp_digest(
         icon = get_category_icon(cat)
         lines.append(f"\n{icon} *{cat.upper()} ({len(items)})*")
         for item in items:
-            time_str = format_time_stamp(item.get("timestamp", ""))
+            time_str = format_time_stamp(item.get("timestamp", ""), include_date=include_date_in_timestamp)
             sender = item.get("sender_name") or item.get("sender", "Unknown")
             summary = item.get("summary", "No summary provided")
             lines.append(f"• *{time_str}* _{sender}_: {summary}")

@@ -23,3 +23,4 @@ PyWhatKit_DB.txt
 *.log
 reports/
 *.pdf
+.scheduler_state.json

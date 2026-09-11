@@ -3,6 +3,9 @@ import re
 import json
 from typing import Dict, Any
 
+import unicodedata
+from email_fetcher import sanitize_text
+
 CATEGORIES = [
     "Admissions",
     "Finance & Accounts",
@@ -22,12 +25,16 @@ def rule_based_fallback_classify(subject: str, body: str, sender: str) -> Dict[s
     Intelligent fallback classifier using heuristic keyword patterns.
     Ensures high-quality summaries even when AI quota is temporarily constrained.
     """
-    text = f"{subject} {body} {sender}".lower()
+    subject_clean = sanitize_text(subject)
+    body_clean = sanitize_text(body)
+    sender_clean = sanitize_text(sender)
+
+    text = f"{subject_clean} {body_clean} {sender_clean}".lower()
 
     # 1. Urgent detection
     urgent_keywords = [
         "urgent", "immediate", "emergency", "court notice", "audit deadline", 
-        "legal notice", "ragging", "disciplinary", "down", "critical alert"
+        "legal notice", "ragging", "disciplinary", "down", "critical alert", "action required"
     ]
     is_urgent = any(kw in text for kw in urgent_keywords)
 
@@ -36,19 +43,19 @@ def rule_based_fallback_classify(subject: str, body: str, sender: str) -> Dict[s
         category = "Urgent"
     elif any(kw in text for kw in ["admission", "seat allotment", "quota", "application form", "counselling", "enrollment", "prospectus"]):
         category = "Admissions"
-    elif any(kw in text for kw in ["accreditation", "exam", "examination", "marksheet", "grade", "syllabus", "curriculum", "timetable", "nba", "naac", "ssr"]):
+    elif any(kw in text for kw in ["accreditation", "exam", "examination", "marksheet", "grade", "syllabus", "curriculum", "timetable", "nba", "naac", "ssr", "lecture", "course", "assignment"]):
         category = "Academics & Exams"
-    elif any(kw in text for kw in ["fee", "payment", "invoice", "refund", "grant", "budget", "accounts", "salary", "treasurer", "billing"]):
+    elif any(kw in text for kw in ["fee", "payment", "invoice", "refund", "grant", "budget", "accounts", "salary", "treasurer", "billing", "stock", "portfolio", "crude", "nifty"]):
         category = "Finance & Accounts"
     elif any(kw in text for kw in ["faculty", "leave application", "recruitment", "professor", "phd scholar", "staff", "tenure", "vice-chancellor"]):
         category = "Faculty & HR"
     elif any(kw in text for kw in ["hostel", "mess", "sports", "student union", "cultural", "complaint", "scholarship"]):
         category = "Student Affairs"
-    elif any(kw in text for kw in ["down", "monitor is down", "security alert", "unauthorized", "password reset", "verification code"]):
+    elif any(kw in text for kw in ["down", "monitor is down", "security alert", "unauthorized", "password reset", "verification code", "antivirus", "mcafee", "threat"]):
         category = "System Alerts & Security"
-    elif any(kw in text for kw in ["internship", "stipend", "placement", "hiring", "ppo", "job vacancy"]):
+    elif any(kw in text for kw in ["internship", "stipend", "placement", "hiring", "ppo", "job vacancy", "hiring", "resume", "roles"]):
         category = "Careers & Internships"
-    elif any(kw in text for kw in ["sale", "discount", "offer", "newsletter", "digest", "tickets"]):
+    elif any(kw in text for kw in ["sale", "discount", "offer", "newsletter", "digest", "tickets", "snapchat", "stories"]):
         category = "Marketing & News"
     elif is_urgent:
         category = "Urgent"
@@ -56,23 +63,33 @@ def rule_based_fallback_classify(subject: str, body: str, sender: str) -> Dict[s
         category = "General"
 
     # Intelligent summary generation from body text
-    cleaned_body = body.strip()
-    # Strip common salutations
-    cleaned_body = re.sub(r'^(dear|respected|hello|hi|good morning|to whom it may concern)[^\n,]*[\n,]', '', cleaned_body, flags=re.IGNORECASE).strip()
+    cleaned_body = re.sub(r'^(dear|respected|hello|hi|good morning|to whom it may concern)[^\n,]*[\n,]', '', body_clean, flags=re.IGNORECASE).strip()
     
     summary = ""
     if cleaned_body:
-        sentences = [s.strip() for s in re.split(r'[.!?\n]+', cleaned_body) if len(s.strip()) > 15]
-        if sentences:
-            summary = sentences[0]
-            if len(sentences) > 1 and len(summary) < 70:
-                summary += f". {sentences[1]}"
+        # Split by periods, question marks, exclamation marks, or newlines
+        raw_sentences = [s.strip() for s in re.split(r'[\r\n.!?]+', cleaned_body)]
+        # Filter out lines that lack substantive letters (like spacers, codes, or boilerplate)
+        meaningful_sentences = [
+            s for s in raw_sentences 
+            if len(re.findall(r'[a-zA-Z0-9]', s)) >= 15
+        ]
+        if meaningful_sentences:
+            summary = meaningful_sentences[0]
+            if len(meaningful_sentences) > 1 and len(summary) < 70:
+                summary += f". {meaningful_sentences[1]}"
             if not summary.endswith("."):
                 summary += "."
 
-    if not summary or len(summary) < 20:
-        clean_subj = subject.strip()
-        summary = f"Notice regarding: {clean_subj}." if clean_subj else "Routine communication received."
+    # If body lacked substantive text (typical in promotional graphic emails), rely on subject
+    if not summary or len(re.findall(r'[a-zA-Z0-9]', summary)) < 15:
+        if subject_clean:
+            summary = subject_clean if subject_clean.endswith(".") else f"{subject_clean}."
+        else:
+            summary = f"Update received from {sender_clean or 'sender'}."
+
+    # Final cleanup to eliminate any remaining unwanted formatting
+    summary = sanitize_text(summary)
 
     return {
         "category": category,
@@ -91,10 +108,14 @@ def classify_email(subject: str, body: str, sender: str, api_key: str = None) ->
     except Exception:
         pass
 
+    subject_clean = sanitize_text(subject)
+    body_clean = sanitize_text(body)
+    sender_clean = sanitize_text(sender)
+
     api_key = api_key or os.getenv("GEMINI_API_KEY")
 
     if not api_key or api_key == "your_gemini_api_key_here":
-        return rule_based_fallback_classify(subject, body, sender)
+        return rule_based_fallback_classify(subject_clean, body_clean, sender_clean)
 
     try:
         import requests
@@ -103,10 +124,10 @@ def classify_email(subject: str, body: str, sender: str, api_key: str = None) ->
 You are an expert executive email assistant for institutional leadership and busy professionals.
 Analyze the email below and generate a high-quality, actionable, 1-to-2 sentence summary.
 
-SENDER: {sender}
-SUBJECT: {subject}
+SENDER: {sender_clean}
+SUBJECT: {subject_clean}
 EMAIL BODY CONTENT:
-{body[:2500]}
+{body_clean[:2500]}
 
 EXECUTIVE SUMMARIZATION RULES:
 1. Identify the core message: What does the sender want, what happened, or what is being announced?
@@ -116,6 +137,7 @@ EXECUTIVE SUMMARIZATION RULES:
 5. If it is a system alert or downtime notification, specify what service is affected and current status.
 6. If it is a career/internship opportunity, specify the role, stipend/prize, and company.
 7. If it is a promotional offer/newsletter, state the specific product or offer clearly.
+8. Output plain text without emojis, special symbols, or unicode formatting.
 
 Return ONLY a valid JSON object:
 {{
@@ -125,9 +147,10 @@ Return ONLY a valid JSON object:
 }}
 """
         candidate_models = [
-            os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"), 
-            "gemini-3.7-flash", 
-            "gemini-3.6-flash"
+            os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+            "gemini-flash-latest",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash"
         ]
         headers = {"Content-Type": "application/json"}
         payload = {
@@ -146,8 +169,8 @@ Return ONLY a valid JSON object:
                     result = response.json()
                     raw_text = result["candidates"][0]["content"]["parts"][0]["text"]
                     data = json.loads(raw_text)
-                    summary = data.get("summary", "").strip()
-                    if summary and len(summary) > 10:
+                    summary = sanitize_text(data.get("summary", ""))
+                    if summary and len(re.findall(r'[a-zA-Z0-9]', summary)) > 10:
                         return {
                             "category": data.get("category", "General").strip(),
                             "is_urgent": bool(data.get("is_urgent", False)),
@@ -156,9 +179,9 @@ Return ONLY a valid JSON object:
             except Exception:
                 continue
 
-        return rule_based_fallback_classify(subject, body, sender)
+        return rule_based_fallback_classify(subject_clean, body_clean, sender_clean)
     except Exception:
-        return rule_based_fallback_classify(subject, body, sender)
+        return rule_based_fallback_classify(subject_clean, body_clean, sender_clean)
 
 if __name__ == "__main__":
     # Test on sample realistic emails

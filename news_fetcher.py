@@ -223,41 +223,42 @@ def fetch_important_news() -> Dict[str, List[Dict[str, str]]]:
     except Exception:
         pass
 
-    print("📰 Fetching 1-day previous candidate headlines for Tech & AI...")
-    tech_queries = [
-        '(AI model launch OR new AI model OR OpenAI OR Anthropic OR DeepSeek OR "Google Gemini" OR "AI breakthrough") when:2d',
-        '(frontier AI OR "AI reasoning" OR "autonomous agent" OR "NVIDIA AI") when:2d'
+    from concurrent.futures import ThreadPoolExecutor
+
+    print("📰 Fetching 1-day previous news headlines in parallel (Tech, India Ed, World Ed, Rajasthan)...")
+    tasks = [
+        ("tech", '(AI model launch OR new AI model OR OpenAI OR Anthropic OR DeepSeek OR "Google Gemini" OR "AI breakthrough") when:2d', 15, 48, "en-IN", "IN", "IN:en"),
+        ("tech", '(frontier AI OR "AI reasoning" OR "autonomous agent" OR "NVIDIA AI") when:2d', 15, 48, "en-IN", "IN", "IN:en"),
+        ("india", '(UGC OR AICTE OR "higher education" OR IIT OR IIM OR "NEP 2020") (reform OR research OR policy OR innovation OR ranking OR grant) when:2d', 20, 48, "en-IN", "IN", "IN:en"),
+        ("india", '("Ministry of Education" OR "university grant" OR "autonomous college" OR "accreditation") India when:2d', 20, 48, "en-IN", "IN", "IN:en"),
+        ("world", '("higher education" OR "world university" OR "global universities" OR MIT OR Harvard OR Oxford OR Stanford OR Cambridge) (breakthrough OR research OR ranking OR discovery OR policy) when:2d', 20, 48, "en-US", "US", "US:en"),
+        ("world", '("Times Higher Education" OR "QS World University" OR "international students" OR "global academia") when:2d', 20, 48, "en-US", "US", "US:en"),
+        ("raj", 'Rajasthan (university OR college OR "higher education" OR "school education" OR "education minister" OR "MNIT Jaipur" OR "IIT Jodhpur" OR "RU Jaipur") when:2d', 20, 48, "en-IN", "IN", "IN:en"),
+        ("raj", '(Jaipur OR Jodhpur OR Kota OR Udaipur OR Bikaner) (university OR college OR "education department" OR "school infrastructure") when:2d', 20, 48, "en-IN", "IN", "IN:en")
     ]
+
     tech_cands = []
-    for q in tech_queries:
-        tech_cands.extend(fetch_rss_candidates(q, max_items=15, max_lookback_hours=48))
-
-    print("🇮🇳 Fetching 1-day previous candidate headlines for India Education (Top 10)...")
-    india_queries = [
-        '(UGC OR AICTE OR "higher education" OR IIT OR IIM OR "NEP 2020") (reform OR research OR policy OR innovation OR ranking OR grant) when:2d',
-        '("Ministry of Education" OR "university grant" OR "autonomous college" OR "accreditation") India when:2d'
-    ]
     india_cands = []
-    for q in india_queries:
-        india_cands.extend(fetch_rss_candidates(q, max_items=20, max_lookback_hours=48))
-
-    print("🌍 Fetching 1-day previous candidate headlines for World Education (Top 5)...")
-    world_queries = [
-        '("higher education" OR "world university" OR "global universities" OR MIT OR Harvard OR Oxford OR Stanford OR Cambridge) (breakthrough OR research OR ranking OR discovery OR policy) when:2d',
-        '("Times Higher Education" OR "QS World University" OR "international students" OR "global academia") when:2d'
-    ]
     world_cands = []
-    for q in world_queries:
-        world_cands.extend(fetch_rss_candidates(q, max_items=20, max_lookback_hours=48, hl="en-US", gl="US", ceid="US:en"))
-
-    print("🏰 Fetching 1-day previous candidate headlines for Rajasthan Education...")
-    raj_queries = [
-        'Rajasthan (university OR college OR "higher education" OR "school education" OR "education minister" OR "MNIT Jaipur" OR "IIT Jodhpur" OR "RU Jaipur") when:2d',
-        '(Jaipur OR Jodhpur OR Kota OR Udaipur OR Bikaner) (university OR college OR "education department" OR "school infrastructure") when:2d'
-    ]
     raj_cands = []
-    for q in raj_queries:
-        raj_cands.extend(fetch_rss_candidates(q, max_items=20, max_lookback_hours=48))
+
+    def fetch_task(t):
+        cat, query, max_items, max_lookback_hours, hl, gl, ceid = t
+        try:
+            return cat, fetch_rss_candidates(query, max_items=max_items, max_lookback_hours=max_lookback_hours, hl=hl, gl=gl, ceid=ceid)
+        except Exception:
+            return cat, []
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for cat, items in executor.map(fetch_task, tasks):
+            if cat == "tech":
+                tech_cands.extend(items)
+            elif cat == "india":
+                india_cands.extend(items)
+            elif cat == "world":
+                world_cands.extend(items)
+            elif cat == "raj":
+                raj_cands.extend(items)
 
     tech_cands = deduplicate_items(tech_cands)
     india_cands = deduplicate_items(india_cands)

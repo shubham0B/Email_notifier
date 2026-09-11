@@ -63,7 +63,7 @@ def send_via_whatsapp_web(body: str, to_number: str = None) -> Dict[str, Any]:
 
     pyautogui.FAILSAFE = False
 
-    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "917378020506")
+    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "")
     # WhatsApp Web requires DIGITS ONLY in the URL. A '+' sign in query strings turns into a space (%20)
     clean_phone = "".join(filter(str.isdigit, recipient))
 
@@ -141,7 +141,7 @@ def ensure_gateway_running() -> bool:
     """Checks if the local WhatsApp gateway is running, and starts it if not."""
     import requests
     try:
-        r = requests.get("http://localhost:3000/status", timeout=2)
+        r = requests.get("http://127.0.0.1:3000/status", timeout=2)
         if r.status_code == 200 and r.json().get("whatsapp_connected"):
             return True
     except Exception:
@@ -168,7 +168,7 @@ def ensure_gateway_running() -> bool:
         for _ in range(12):
             time.sleep(1)
             try:
-                r = requests.get("http://localhost:3000/status", timeout=2)
+                r = requests.get("http://127.0.0.1:3000/status", timeout=2)
                 if r.status_code == 200 and r.json().get("whatsapp_connected"):
                     print("✅ Local WhatsApp Gateway auto-started and connected!")
                     return True
@@ -180,18 +180,18 @@ def ensure_gateway_running() -> bool:
 
 def send_via_local_gateway(body: str, to_number: str = None) -> Dict[str, Any]:
     """
-    Sends message via our local WhatsApp Gateway (http://localhost:3000/send).
+    Sends message via our local WhatsApp Gateway (http://127.0.0.1:3000/send).
     Completely headless, runs 24/7 in the background with no popups and zero fees.
     """
     ensure_gateway_running()
-    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "917378020506")
+    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "")
     clean_phone = "".join(filter(str.isdigit, recipient))
 
     print(f"📡 Sending via Local WhatsApp Gateway to {clean_phone}...")
     try:
         import requests
         resp = requests.post(
-            "http://localhost:3000/send",
+            "http://127.0.0.1:3000/send",
             json={"number": clean_phone, "message": body},
             timeout=20
         )
@@ -202,7 +202,7 @@ def send_via_local_gateway(body: str, to_number: str = None) -> Dict[str, Any]:
             print(f"⚠️ Gateway returned {resp.status_code}: {resp.text}")
             return {"status": "error", "error": resp.text}
     except Exception as e:
-        print(f"❌ Could not reach Local Gateway at http://localhost:3000: {e}")
+        print(f"❌ Could not reach Local Gateway at http://127.0.0.1:3000: {e}")
         return {"status": "error", "error": str(e)}
 
 def send_document_via_gateway(
@@ -216,7 +216,7 @@ def send_document_via_gateway(
     Completely silent and headless.
     """
     ensure_gateway_running()
-    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "917378020506")
+    recipient = to_number or os.getenv("DEAN_WHATSAPP_TO", "")
     clean_phone = "".join(filter(str.isdigit, recipient))
 
     resolved_name = file_name or os.path.basename(file_path)
@@ -226,7 +226,7 @@ def send_document_via_gateway(
     try:
         import requests
         resp = requests.post(
-            "http://localhost:3000/send-document",
+            "http://127.0.0.1:3000/send-document",
             json={
                 "number": clean_phone,
                 "filePath": abs_path,
@@ -243,7 +243,7 @@ def send_document_via_gateway(
             print(f"⚠️ Gateway returned {resp.status_code}: {resp.text}")
             return {"status": "error", "error": resp.text}
     except Exception as e:
-        print(f"❌ Could not reach Local Gateway at http://localhost:3000/send-document: {e}")
+        print(f"❌ Could not reach Local Gateway at http://127.0.0.1:3000/send-document: {e}")
         return {"status": "error", "error": str(e)}
 
 

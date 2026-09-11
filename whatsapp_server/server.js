@@ -15,6 +15,7 @@ app.use(express.json({ limit: '10mb' }));
 const PORT = 3000;
 let sock = null;
 let isConnected = false;
+const messageStore = new Map();
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
@@ -24,7 +25,13 @@ async function connectToWhatsApp() {
         version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        auth: state
+        auth: state,
+        getMessage: async (key) => {
+            if (key?.id && messageStore.has(key.id)) {
+                return messageStore.get(key.id);
+            }
+            return undefined;
+        }
     });
 
     sock.ev.on('connection.update', (update) => {
@@ -84,6 +91,9 @@ app.post('/send', async (req, res) => {
 
         console.log(`📨 Sending message to ${cleanNumber}...`);
         const sent = await sock.sendMessage(cleanNumber, { text: message });
+        if (sent?.key?.id && sent?.message) {
+            messageStore.set(sent.key.id, sent.message);
+        }
 
         res.json({ 
             success: true, 
@@ -130,6 +140,9 @@ app.post('/send-document', async (req, res) => {
             fileName: resolvedName,
             caption: caption || ''
         });
+        if (sent?.key?.id && sent?.message) {
+            messageStore.set(sent.key.id, sent.message);
+        }
 
         res.json({ 
             success: true, 

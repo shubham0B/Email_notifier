@@ -15,6 +15,29 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import unicodedata
+
+def sanitize_text(text: str) -> str:
+    """Removes invisible, zero-width, non-printable characters, HTML entities, and normalizes spaces."""
+    if not text:
+        return ""
+    # Unescape HTML entities (handles &zwnj;, &#847;, &nbsp;, etc.)
+    text = html.unescape(text)
+    # Remove zero-width chars, BOM, soft hyphens, combining grapheme joiners, control formatting
+    text = re.sub(r'[\u200B-\u200F\uFEFF\u034F\u00AD\u2060\u180E\uFFF9-\uFFFB\u2028\u2029]', '', text)
+    # Convert various non-breaking / special unicode spaces to normal space
+    text = re.sub(r'[\u00A0\u2000-\u200A\u202F\u205F\u3000]', ' ', text)
+    # Strip non-printable / control characters (except newline, carriage return, tab)
+    text = ''.join(ch for ch in text if ch in ('\n', '\r', '\t') or not unicodedata.category(ch).startswith('C'))
+    # Remove URLs/links and long tracking tokens
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'\b(?:qs=)?[A-Za-z0-9_\-=+]{25,}\b', '', text)
+    # Collapse long lines of divider characters (e.g., -------- or ====== or .....)
+    text = re.sub(r'[-_=~*.]{4,}', ' ', text)
+    # Replace multiple spaces with a single space
+    text = re.sub(r'[ \t]+', ' ', text)
+    return text.strip()
+
 def clean_email_html(raw_html: str) -> str:
     """Strips tags, scripts, and CSS, leaving clean, readable human text."""
     if not raw_html:
@@ -25,8 +48,8 @@ def clean_email_html(raw_html: str) -> str:
     text = re.sub(r'<(br|p|div|tr|li|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
     # Strip all remaining tags
     text = re.sub(r'<[^>]+>', ' ', text)
-    # Unescape HTML entities
-    text = html.unescape(text)
+    # Sanitize characters (remove hidden zero-width spaces, joiners, BOMs, entities)
+    text = sanitize_text(text)
     # Filter blank lines and normalize whitespace
     lines = [re.sub(r'\s+', ' ', line).strip() for line in text.splitlines()]
     clean = '\n'.join([l for l in lines if l])
@@ -67,12 +90,20 @@ def extract_email_body(msg) -> str:
             else:
                 html_text = decoded
 
-    # Prefer plain text if substantial; otherwise clean HTML
-    if len(plain_text.strip()) > 30:
-        return plain_text.strip()
-    elif html_text:
-        return clean_email_html(html_text)
-    return plain_text.strip()
+    clean_plain = sanitize_text(plain_text)
+    clean_html = clean_email_html(html_text) if html_text else ""
+
+    # Count alphanumeric characters to pick whichever has real substance
+    plain_alnum = len(re.findall(r'[a-zA-Z0-9]', clean_plain))
+    html_alnum = len(re.findall(r'[a-zA-Z0-9]', clean_html))
+
+    if html_alnum > plain_alnum and html_alnum > 25:
+        return clean_html
+    elif plain_alnum > 20:
+        return clean_plain
+    elif clean_html:
+        return clean_html
+    return clean_plain
 
 def decode_full_header(header_val: str) -> str:
     """Decodes all chunks of an email header across multiple encodings."""
@@ -86,9 +117,9 @@ def decode_full_header(header_val: str) -> str:
                 decoded += chunk.decode(enc or "utf-8", errors="ignore")
             else:
                 decoded += str(chunk)
-        return decoded.strip()
+        return sanitize_text(decoded)
     except Exception:
-        return str(header_val)
+        return sanitize_text(str(header_val))
 
 def get_mock_college_emails() -> List[Dict[str, Any]]:
     """
@@ -146,9 +177,10 @@ def get_mock_college_emails() -> List[Dict[str, Any]]:
         }
     ]
 
-def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List[Dict[str, Any]]:
+def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
     """
     Connects to mailbox via IMAP and fetches emails.
+    If start_date and end_date are provided (YYYY-MM-DD), fetches emails received in that date range.
     If target_date is provided (YYYY-MM-DD), fetches emails received on that specific date.
     Extracts clean readable text (even from complex HTML emails).
     """
@@ -167,7 +199,14 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
         mail.login(user, password)
         mail.select("inbox")
 
-        if target_date:
+        if start_date and end_date:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            since_str = start_dt.strftime("%d-%b-%Y")
+            before_str = end_dt.strftime("%d-%b-%Y")
+            print(f"📅 Searching mailbox for date range: {start_date} to {end_date} ({since_str} to {before_str})...")
+            status, messages = mail.search(None, "SINCE", since_str, "BEFORE", before_str)
+        elif target_date:
             target_dt = datetime.strptime(target_date, "%Y-%m-%d")
             next_day_dt = target_dt + timedelta(days=1)
             since_str = target_dt.strftime("%d-%b-%Y")
@@ -180,7 +219,11 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
         msg_ids = messages[0].split() if (status == "OK" and messages and messages[0]) else []
 
         if not msg_ids:
-            if target_date:
+            if start_date and end_date:
+                print(f"📬 No emails found in range {start_date} to {end_date}.")
+                mail.logout()
+                return []
+            elif target_date:
                 print(f"📬 No emails found matching date {target_date}.")
                 mail.logout()
                 return []
@@ -195,7 +238,7 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None) -> List
                     return []
         else:
             print(f"📥 Found {len(msg_ids)} email(s) for target window. Parsing...")
-            msg_ids = msg_ids[-30:]  # Process up to 30 emails
+            msg_ids = msg_ids[-50:]  # Process up to 50 emails
 
         for msg_id in msg_ids:
             res, data = mail.fetch(msg_id, "(RFC822)")
