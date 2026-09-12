@@ -6,13 +6,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from urllib.parse import urlparse
+
 def get_db_connection():
-    """Establishes connection to personal_whatsapp_db."""
-    host = os.getenv("MYSQL_HOST", "127.0.0.1")
-    port = int(os.getenv("MYSQL_PORT", "3306"))
-    user = os.getenv("MYSQL_USER", "root")
-    password = os.getenv("MYSQL_PASSWORD", "")
-    database = os.getenv("MYSQL_DATABASE", "personal_whatsapp_db")
+    """Establishes connection to personal_whatsapp_db using DATABASE_URL or individual variables."""
+    db_url = os.getenv("DATABASE_URL")
+    
+    if db_url:
+        parsed = urlparse(db_url)
+        user = parsed.username or "root"
+        password = parsed.password or ""
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 3306
+        database = parsed.path.lstrip("/") or "personal_whatsapp_db"
+    else:
+        host = os.getenv("MYSQL_HOST", "127.0.0.1")
+        port = int(os.getenv("MYSQL_PORT", "3306"))
+        user = os.getenv("MYSQL_USER", "root")
+        password = os.getenv("MYSQL_PASSWORD", "")
+        database = os.getenv("MYSQL_DATABASE", "personal_whatsapp_db")
 
     if not password:
         return None
