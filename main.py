@@ -57,8 +57,8 @@ def main():
     elif args.today:
         target_date = datetime.now().strftime("%Y-%m-%d")
     else:
-        # Default: ALWAYS summarize today's emails only
-        target_date = datetime.now().strftime("%Y-%m-%d")
+        # Default: Rolling 24-Hour Lookback Window from current run time
+        target_date = None
 
     # Default to mock simulation if no flags provided or if credentials missing
     use_mock = args.mock or (not args.live and not os.getenv("EMAIL_USER"))
@@ -84,6 +84,8 @@ def main():
         print(f"Target Date Range Filter: {start_date} to {end_date}")
     elif target_date:
         print(f"Target Date Filter: {target_date}")
+    else:
+        print("Target Date Filter: Rolling 24-Hour Lookback Window (Past 24 Hours from current time)")
     dispatch_mode = "CONSOLE PREVIEW (DRY-RUN)" if is_dry_run else ("LOCAL WHATSAPP GATEWAY" if use_gateway else ("WHATSAPP WEB" if args.web else "TWILIO CLOUD"))
     print(f"WhatsApp Dispatch: {dispatch_mode}")
     print("=" * 60)
@@ -96,9 +98,12 @@ def main():
         if start_date and end_date:
             print(f"\n[Step 1/4] Fetching emails from live mailbox for {start_date} to {end_date}...")
             raw_emails = fetch_live_emails(start_date=start_date, end_date=end_date)
-        else:
-            print(f"\n[Step 1/4] Fetching emails from live mailbox{' for ' + target_date if target_date else ''}...")
+        elif target_date:
+            print(f"\n[Step 1/4] Fetching emails from live mailbox for date {target_date}...")
             raw_emails = fetch_live_emails(target_date=target_date)
+        else:
+            print("\n[Step 1/4] Fetching emails from live mailbox for the rolling 24-hour window...")
+            raw_emails = fetch_live_emails(lookback_hours=24)
 
     print(f"-> Ingested {len(raw_emails)} emails for analysis.")
 
@@ -146,8 +151,10 @@ def main():
             digest_date_str = target_date
         file_date_str = target_date
     else:
-        digest_date_str = datetime.now().strftime("%A, %b %d, %Y")
-        file_date_str = datetime.now().strftime("%Y-%m-%d")
+        now_dt = datetime.now()
+        yesterday_dt = now_dt - timedelta(hours=24)
+        digest_date_str = f"{now_dt.strftime('%A, %b %d, %Y')} (Past 24h: {yesterday_dt.strftime('%d %b %I:%M %p')} - {now_dt.strftime('%I:%M %p')})"
+        file_date_str = now_dt.strftime("%Y-%m-%d")
 
     from pa_manager import get_pa_agenda
     agenda_date = target_date or datetime.now().strftime("%Y-%m-%d")

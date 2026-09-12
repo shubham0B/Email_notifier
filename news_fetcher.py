@@ -19,14 +19,14 @@ if sys.platform == "win32":
 def fetch_rss_candidates(
     query: str, 
     max_items: int = 20, 
-    max_lookback_hours: int = 48,
+    max_lookback_hours: int = 24,
     hl: str = "en-IN", 
     gl: str = "IN", 
     ceid: str = "IN:en"
 ) -> List[Dict[str, str]]:
     """
     Fetches raw news candidates from Google News RSS feed for a targeted query,
-    enforcing a strict recency filter (1 day previous / last 24-48 hours).
+    enforcing a strict recency filter (strictly past 24 hours).
     100% free, requires no API key.
     """
     now = datetime.now()
@@ -112,14 +112,14 @@ def curate_all_news_with_gemini(
     import requests
 
     now = datetime.now()
-    yesterday = now - timedelta(days=1)
-    target_date_str = yesterday.strftime("%A, %d %B %Y")
+    cutoff_24h = now - timedelta(hours=24)
+    target_window_str = f"{cutoff_24h.strftime('%d %b %I:%M %p')} to {now.strftime('%d %b %I:%M %p, %Y')}"
 
     candidate_models = ["gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.6-flash"]
 
     prompt = f"""
 You are an executive intelligence director curating high-impact briefings for university leadership and education executives.
-Target Reference Date: 1 Day Previous ({target_date_str}).
+Target Recency Window: Strictly past 24 hours ({target_window_str}).
 
 Analyze the candidate real-time headlines below and curate them into 4 distinct, high-value sections:
 
@@ -146,13 +146,13 @@ Guidelines:
 - Reject routine admit card download links or exam form alerts; prioritize policy, infrastructure, university innovations, or major reforms.
 
 CRITICAL RECENCY INSTRUCTION:
-- All selected news must strictly reflect the 1-day previous / past 24-48 hours window.
+- All selected news must strictly reflect the last 24-hour window up to the current run time.
 
 For EVERY selected item provide:
 - "title": Clean, professional headline (strip out redundant source suffix, fix any corrupted quotes or characters)
 - "summary": Exactly 1 crisp sentence explaining what makes this significant or what decision was taken.
 - "source": Source publication or institute name
-- "pub_date": Clean publication date (e.g. {yesterday.strftime('%a, %d %b %Y')})
+- "pub_date": Clean publication date (e.g. {now.strftime('%a, %d %b %Y')})
 
 Return strictly valid JSON:
 {{

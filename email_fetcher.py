@@ -199,6 +199,10 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_d
         mail.login(user, password)
         mail.select("inbox")
 
+        now = datetime.now()
+        is_rolling_window = False
+        cutoff_dt = now - timedelta(hours=lookback_hours)
+
         if start_date and end_date:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
@@ -214,31 +218,29 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_d
             print(f"📅 Searching mailbox specifically for date: {target_date} ({since_str})...")
             status, messages = mail.search(None, "SINCE", since_str, "BEFORE", before_str)
         else:
-            status, messages = mail.search(None, "UNSEEN")
+            # Rolling 24-hour window: search from yesterday's date, then filter precisely by timestamp
+            is_rolling_window = True
+            env_hours = os.getenv("EMAIL_LOOKBACK_HOURS")
+            actual_lookback = int(env_hours) if env_hours and env_hours.isdigit() else (lookback_hours or 24)
+            cutoff_dt = now - timedelta(hours=actual_lookback)
+            since_str = cutoff_dt.strftime("%d-%b-%Y")
+            print(f"📅 Searching mailbox for rolling {actual_lookback}-hour window (since {cutoff_dt.strftime('%d-%b-%Y %I:%M %p')})...")
+            status, messages = mail.search(None, "SINCE", since_str)
 
         msg_ids = messages[0].split() if (status == "OK" and messages and messages[0]) else []
 
         if not msg_ids:
             if start_date and end_date:
                 print(f"📬 No emails found in range {start_date} to {end_date}.")
-                mail.logout()
-                return []
             elif target_date:
                 print(f"📬 No emails found matching date {target_date}.")
-                mail.logout()
-                return []
             else:
-                print("📬 No unread emails found in inbox. Fetching latest 10 recent emails for demonstration...")
-                status, messages = mail.search(None, "ALL")
-                if status == "OK" and messages and messages[0]:
-                    msg_ids = messages[0].split()[-10:]
-                else:
-                    print("📬 Mailbox is completely empty.")
-                    mail.logout()
-                    return []
+                print(f"📬 No emails found in mailbox since {cutoff_dt.strftime('%d-%b-%Y %I:%M %p')}.")
+            mail.logout()
+            return []
         else:
-            print(f"📥 Found {len(msg_ids)} email(s) for target window. Parsing...")
-            msg_ids = msg_ids[-50:]  # Process up to 50 emails
+            print(f"📥 Found {len(msg_ids)} email candidate(s). Parsing and verifying 24-hour timestamps...")
+            msg_ids = msg_ids[-75:]  # Process up to 75 latest emails
 
         for msg_id in msg_ids:
             res, data = mail.fetch(msg_id, "(RFC822)")
@@ -248,6 +250,19 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_d
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
 
+            # Date / Timestamp
+            date_tuple = email.utils.parsedate_tz(msg.get("Date"))
+            if date_tuple:
+                local_dt = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
+                timestamp_str = local_dt.isoformat()
+            else:
+                local_dt = now
+                timestamp_str = now.isoformat()
+
+            # Strict 24-hour rolling cutoff check
+            if is_rolling_window and local_dt < cutoff_dt:
+                continue
+
             subject = decode_full_header(msg.get("Subject", "No Subject"))
             sender = decode_full_header(msg.get("From", "Unknown Sender"))
 
@@ -255,14 +270,6 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_d
             sender_name = sender.split("<")[0].strip('" ')
             if not sender_name or "@" in sender_name:
                 sender_name = sender
-
-            # Date / Timestamp
-            date_tuple = email.utils.parsedate_tz(msg.get("Date"))
-            if date_tuple:
-                local_dt = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
-                timestamp_str = local_dt.isoformat()
-            else:
-                timestamp_str = datetime.now().isoformat()
 
             # Clean, readable body extraction (handles HTML, scripts, CSS, multipart)
             body = extract_email_body(msg)
@@ -275,6 +282,8 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_d
                 "body": body[:2500],  # Full rich text for accurate AI analysis
                 "timestamp": timestamp_str
             })
+
+        print(f"-> Verified {len(emails)} email(s) strictly within the target window.")
 
         mail.logout()
         return emails
