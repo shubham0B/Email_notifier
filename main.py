@@ -149,15 +149,30 @@ def main():
         digest_date_str = datetime.now().strftime("%A, %b %d, %Y")
         file_date_str = datetime.now().strftime("%Y-%m-%d")
 
+    from pa_manager import get_pa_agenda
+    agenda_date = target_date or datetime.now().strftime("%Y-%m-%d")
+    pa_agenda = get_pa_agenda(agenda_date)
+    meetings_count = len(pa_agenda.get("meetings", []))
+    reminders_count = len(pa_agenda.get("reminders", []))
+    if meetings_count or reminders_count:
+        print(f"📋 Loaded PA Agenda for {agenda_date}: {meetings_count} meeting(s), {reminders_count} reminder(s).")
+
     digest_message = build_whatsapp_digest(
         processed_emails, 
         digest_date_str=digest_date_str,
-        include_date_in_timestamp=is_range
+        include_date_in_timestamp=is_range,
+        pa_agenda=pa_agenda
     )
 
     print("\n[Step 3b/4] Fetching Tech & Higher Education news headlines and generating PDF document...")
     news_data = fetch_important_news()
-    pdf_path = generate_digest_pdf(processed_emails, news_data, digest_date_str=digest_date_str, file_date_str=file_date_str)
+    pdf_path = generate_digest_pdf(
+        processed_emails, 
+        news_data, 
+        digest_date_str=digest_date_str, 
+        file_date_str=file_date_str,
+        pa_agenda=pa_agenda
+    )
 
     # Record digest into personal_whatsapp_db
     try:
@@ -178,7 +193,7 @@ def main():
         send_via_local_gateway(digest_message)
         send_document_via_gateway(
             pdf_path, 
-            caption=f"📄 *Executive Briefing Document ({digest_date_str or 'Today'})*\n• Inbound Email Action Summaries\n• Tech & AI Breakthroughs (1-Day Previous)\n• India Higher Education (Top 10 | 1-Day Previous)\n• World Higher Education (Top 5 | 1-Day Previous)\n• Rajasthan Education Updates (1-Day Previous)"
+            caption=f"📄 *Executive Briefing Document ({digest_date_str or 'Today'})*\n• Today's Executive Schedule & Appointments\n• Inbound Email Action Summaries\n• Tech & AI Breakthroughs (1-Day Previous)\n• Higher Education Intelligence (India, Global & Rajasthan)"
         )
     elif args.web:
         print("\n[Step 4/4] Delivering digest via WhatsApp Web...")

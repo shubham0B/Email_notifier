@@ -42,21 +42,42 @@ def build_whatsapp_digest(
     emails: List[Dict[str, Any]], 
     college_name: str = "Executive Inbox Monitor",
     digest_date_str: str = None,
-    include_date_in_timestamp: bool = False
+    include_date_in_timestamp: bool = False,
+    pa_agenda: Dict[str, Any] = None
 ) -> str:
     """
     Constructs a clean, emoji-rich WhatsApp digest message from classified emails.
-    Dynamically groups by any category returned by the AI based on real email context.
+    Dynamically groups by any category returned by the AI based on real email context,
+    with executive schedule and appointments from the PA placed prominently at the top.
     """
     if not digest_date_str:
         digest_date_str = datetime.now().strftime("%A, %b %d, %Y")
 
     if not emails:
-        return (
-            f"📬 *Daily Email Digest*\n"
-            f"📅 _{digest_date_str}_\n\n"
-            f"✅ *All Clear:* No new unread emails received in the last monitoring period."
-        )
+        empty_lines = [
+            f"📬 *DAILY EXECUTIVE BRIEFING*",
+            f"📍 _{college_name}_",
+            f"📅 *Date:* {digest_date_str}",
+            "─" * 22
+        ]
+        if pa_agenda and (pa_agenda.get("meetings") or pa_agenda.get("reminders")):
+            empty_lines.append("📅 *TODAY'S SCHEDULE & APPOINTMENTS (FROM PA)*")
+            if pa_agenda.get("meetings"):
+                for m in pa_agenda["meetings"]:
+                    m_time = m.get("time", "").strip()
+                    m_title = m.get("title", "").strip()
+                    m_loc = m.get("location", "").strip()
+                    loc_str = f" ({m_loc})" if m_loc else ""
+                    empty_lines.append(f"⏱️ *{m_time}* - *{m_title}*{loc_str}")
+                    if m.get("notes"):
+                        empty_lines.append(f"   ↳ _{m['notes']}_")
+            if pa_agenda.get("reminders"):
+                empty_lines.append("\n📝 *Executive Reminders & Tasks:*")
+                for rem in pa_agenda["reminders"]:
+                    empty_lines.append(f"  • {rem}")
+            empty_lines.append("─" * 22)
+        empty_lines.append("✅ *Inbound Inbox:* No new unread emails received.")
+        return "\n".join(empty_lines)
 
     # Group emails dynamically by category
     grouped: Dict[str, List[Dict[str, Any]]] = {}
@@ -77,12 +98,31 @@ def build_whatsapp_digest(
     
     # Message Header
     lines = [
-        f"📬 *SMART EMAIL DIGEST*",
+        f"📬 *DAILY EXECUTIVE BRIEFING*",
         f"📍 _{college_name}_",
         f"📅 *Date:* {digest_date_str}",
         f"📨 *Total Inbound:* {total_emails} emails",
         "─" * 22
     ]
+
+    # Section: Today's Executive Schedule & Appointments (from PA)
+    if pa_agenda and (pa_agenda.get("meetings") or pa_agenda.get("reminders")):
+        lines.append("📅 *TODAY'S SCHEDULE & APPOINTMENTS (FROM PA)*")
+        if pa_agenda.get("meetings"):
+            for m in pa_agenda["meetings"]:
+                m_time = m.get("time", "").strip()
+                m_title = m.get("title", "").strip()
+                m_loc = m.get("location", "").strip()
+                m_notes = m.get("notes", "").strip()
+                loc_str = f" ({m_loc})" if m_loc else ""
+                lines.append(f"⏱️ *{m_time}* - *{m_title}*{loc_str}")
+                if m_notes:
+                    lines.append(f"   ↳ _{m_notes}_")
+        if pa_agenda.get("reminders"):
+            lines.append("\n📝 *Executive Reminders & Tasks:*")
+            for rem in pa_agenda["reminders"]:
+                lines.append(f"  • {rem}")
+        lines.append("─" * 22)
 
     # Category overview breakdown summary (sorted by count)
     sorted_categories = sorted(grouped.keys(), key=lambda k: len(grouped[k]), reverse=True)

@@ -112,13 +112,15 @@ def generate_digest_pdf(
     news: Dict[str, List[Dict[str, str]]],
     output_path: str = None,
     digest_date_str: str = None,
-    file_date_str: str = None
+    file_date_str: str = None,
+    pa_agenda: Dict[str, Any] = None
 ) -> str:
     """
     Generates an executive briefing PDF report containing:
-    1. Daily categorized email summaries with arrival timestamps
-    2. Important Tech & AI News Headlines
-    3. Important Higher Education & University News Headlines
+    1. Today's Executive Schedule & Appointments (From PA)
+    2. Daily categorized email summaries with arrival timestamps
+    3. Important Tech & AI News Headlines
+    4. Important Higher Education & University News Headlines
     """
     date_tag = file_date_str or datetime.now().strftime("%Y-%m-%d")
     if not digest_date_str:
@@ -157,30 +159,31 @@ def generate_digest_pdf(
         'DocSubHeader',
         parent=styles['Normal'],
         fontName=DEFAULT_FONT,
-        fontSize=10,
-        leading=13,
-        textColor=colors.HexColor('#475569')
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#64748B')
     )
 
     section_title_style = ParagraphStyle(
         'SectionTitle',
         parent=styles['Normal'],
         fontName=DEFAULT_FONT_BOLD,
-        fontSize=12,
-        leading=15,
+        fontSize=11,
+        leading=14,
         textColor=colors.HexColor('#1E293B'),
-        spaceBefore=10,
+        spaceBefore=8,
         spaceAfter=4
     )
 
-    category_header_style = ParagraphStyle(
-        'CategoryHeader',
+    category_heading_style = ParagraphStyle(
+        'CategoryHeading',
         parent=styles['Normal'],
         fontName=DEFAULT_FONT_BOLD,
         fontSize=10,
         leading=13,
         textColor=colors.HexColor('#2563EB')
     )
+    category_header_style = category_heading_style
 
     item_title_style = ParagraphStyle(
         'ItemTitle',
@@ -215,14 +218,81 @@ def generate_digest_pdf(
     story.append(Paragraph("EXECUTIVE BRIEFING &amp; EMAIL DIGEST", header_style))
     story.append(Spacer(1, 4))
     
+    pa_meetings_count = len(pa_agenda.get("meetings", [])) if pa_agenda else 0
     meta_text = (
         f"<b>Date:</b> {clean_pdf_text(digest_date_str)}  |  "
+        f"<b>Scheduled Meetings:</b> {pa_meetings_count}  |  "
         f"<b>Inbound Emails:</b> {len(emails)}  |  "
         f"<b>AI Status:</b> Active Intelligence Report"
     )
     story.append(Paragraph(meta_text, sub_header_style))
     story.append(Spacer(1, 8))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563EB'), spaceBefore=2, spaceAfter=10))
+
+    # Section 1: Executive Schedule & Appointments (From PA)
+    if pa_agenda and (pa_agenda.get("meetings") or pa_agenda.get("reminders")):
+        story.append(Paragraph("EXECUTIVE SCHEDULE &amp; APPOINTMENTS (FROM PA)", section_title_style))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#CBD5E1'), spaceBefore=2, spaceAfter=8))
+
+        meetings = pa_agenda.get("meetings", [])
+        if meetings:
+            table_data = [
+                [
+                    Paragraph("<b>TIME</b>", ParagraphStyle('TH1', parent=item_title_style, textColor=colors.white, fontSize=8)),
+                    Paragraph("<b>MEETING &amp; AGENDA</b>", ParagraphStyle('TH2', parent=item_title_style, textColor=colors.white, fontSize=8)),
+                    Paragraph("<b>LOCATION / MODE</b>", ParagraphStyle('TH3', parent=item_title_style, textColor=colors.white, fontSize=8)),
+                    Paragraph("<b>ATTENDEES &amp; PREP NOTES</b>", ParagraphStyle('TH4', parent=item_title_style, textColor=colors.white, fontSize=8))
+                ]
+            ]
+            for m in meetings:
+                t_str = clean_pdf_text(m.get("time", "TBD"))
+                title_str = clean_pdf_text(m.get("title", "Meeting"))
+                loc_str = clean_pdf_text(m.get("location", "Dean Office"))
+                att_str = clean_pdf_text(m.get("attendees", ""))
+                notes_str = clean_pdf_text(m.get("notes", ""))
+                
+                details = f"<b>{att_str}</b>" if att_str else ""
+                if notes_str:
+                    details += f"<br/><i>Note: {notes_str}</i>" if details else f"<i>Note: {notes_str}</i>"
+
+                table_data.append([
+                    Paragraph(f"<b>{t_str}</b>", item_body_style),
+                    Paragraph(f"<b>{title_str}</b>", item_title_style),
+                    Paragraph(loc_str, item_body_style),
+                    Paragraph(details or "-", item_body_style)
+                ])
+
+            t = Table(table_data, colWidths=[1.2 * inch, 2.3 * inch, 1.5 * inch, 2.5 * inch])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#F8FAFC'), colors.white]),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 6))
+
+        reminders = pa_agenda.get("reminders", [])
+        if reminders:
+            rem_html = "<b>Executive Priority Reminders &amp; Deadlines:</b><br/>" + "<br/>".join([f"• {clean_pdf_text(r)}" for r in reminders])
+            rem_table = Table([[Paragraph(rem_html, item_body_style)]], colWidths=[7.5 * inch])
+            rem_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FEF3C7')),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#F59E0B')),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ]))
+            story.append(rem_table)
+
+        story.append(Spacer(1, 10))
 
     # 2. Section: Inbound Email Highlights
     story.append(Paragraph("INBOUND EMAIL ACTION SUMMARIES", section_title_style))

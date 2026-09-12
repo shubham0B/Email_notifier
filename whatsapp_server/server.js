@@ -169,8 +169,86 @@ app.post('/send-document', async (req, res) => {
     }
 });
 
+// ==========================================
+// PA PORTAL & AGENDA MANAGEMENT API
+// ==========================================
+const SCHEDULE_FILE = path.join(path.resolve(), '..', 'data', 'pa_schedule.json');
+
+// Serve static assets from public/
+app.use(express.static(path.join(path.resolve(), 'public')));
+
+app.get('/pa', (req, res) => {
+    res.sendFile(path.join(path.resolve(), 'public', 'pa_portal.html'));
+});
+
+// GET PA schedule for target date
+app.get('/api/pa/schedule', (req, res) => {
+    const targetDate = req.query.date || new Date().toISOString().split('T')[0];
+    try {
+        if (fs.existsSync(SCHEDULE_FILE)) {
+            const data = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf-8'));
+            return res.json(data[targetDate] || { meetings: [], reminders: [] });
+        }
+        return res.json({ meetings: [], reminders: [] });
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
+// POST update PA schedule
+app.post('/api/pa/schedule', (req, res) => {
+    const { date, meetings, reminders } = req.body;
+    if (!date) {
+        return res.status(400).json({ error: 'Date is required.' });
+    }
+    try {
+        let store = {};
+        if (fs.existsSync(SCHEDULE_FILE)) {
+            try {
+                store = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf-8'));
+            } catch (err) {
+                store = {};
+            }
+        }
+        store[date] = {
+            meetings: meetings || [],
+            reminders: reminders || []
+        };
+        const dataDir = path.dirname(SCHEDULE_FILE);
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+        fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(store, null, 2), 'utf-8');
+        return res.json({ success: true, date });
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
+// Trigger daily briefing on-demand from PA portal
+app.post('/api/pa/trigger-briefing', (req, res) => {
+    const targetDate = req.body.date || new Date().toISOString().split('T')[0];
+    const projectRoot = path.resolve('..');
+
+    console.log(`🚀 PA triggered briefing dispatch for date: ${targetDate}`);
+    try {
+        import('child_process').then(({ spawn }) => {
+            const pyProcess = spawn('python', ['-X', 'utf8', 'main.py', '--live', '--gateway', '--date', targetDate], {
+                cwd: projectRoot,
+                detached: true,
+                stdio: 'ignore'
+            });
+            pyProcess.unref();
+        });
+        return res.json({ success: true, message: `Briefing generation triggered for ${targetDate}` });
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
 // Start server and connection
 app.listen(PORT, () => {
     console.log(`📡 WhatsApp Gateway API Server running on port ${PORT}...`);
+    console.log(`🏛️ PA Executive Portal active at: http://localhost:${PORT}/pa`);
     connectToWhatsApp();
 });

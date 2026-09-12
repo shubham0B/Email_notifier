@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dean's Executive Briefing Portal | PA Agenda Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0B0F19;
+      --surface: #131B2E;
+      --surface-elevated: #1B2640;
+      --border: #233252;
+      --accent: #3B82F6;
+      --accent-hover: #2563EB;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --success: #10B981;
+      --warning: #F59E0B;
+      --danger: #EF4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 960px;
+    }
+
+    /* Top Navbar */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-title h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-title p {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--success);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    /* Control Bar */
+    .control-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .date-picker-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .date-picker-group label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .date-input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .date-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #10B981, #059669);
+      color: white;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-success:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover {
+      background: var(--surface-elevated);
+    }
+
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--danger);
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .btn-danger-outline:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* Section Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Meeting Item Row */
+    .meeting-item {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+      display: grid;
+      grid-template-columns: 140px 1fr 180px 40px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .meeting-item {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .form-control {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      width: 100%;
+    }
+
+    .form-control:focus {
+      border-color: var(--accent);
+    }
+
+    .delete-btn-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-top: 24px;
+    }
+
+    /* Reminders List */
+    .reminder-item {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .reminder-item input {
+      flex: 1;
+    }
+
+    /* Notification Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1E293B;
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-title">
+        <h1>🏛️ Dean's Executive Briefing Portal</h1>
+        <p>Personal Assistant (PA) Schedule &amp; Daily Agenda Management</p>
+      </div>
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="gateway-status">Gateway Connected</span>
+      </div>
+    </div>
+
+    <!-- Control Bar -->
+    <div class="control-bar">
+      <div class="date-picker-group">
+        <label for="agenda-date">AGENDA DATE:</label>
+        <input type="date" id="agenda-date" class="date-input">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-outline" id="load-btn" onclick="loadAgenda()">🔄 Refresh</button>
+        <button class="btn btn-primary" id="save-btn" onclick="saveAgenda()">💾 Save Schedule</button>
+        <button class="btn btn-success" id="dispatch-btn" onclick="saveAndDispatch()">🚀 Save &amp; Dispatch Briefing</button>
+      </div>
+    </div>
+
+    <!-- Meetings Section -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>📅</span> Scheduled Meetings &amp; Appointments
+        </div>
+        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="addMeetingRow()">+ Add Meeting</button>
+      </div>
+
+      <div id="meetings-list">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+
+    <!-- Reminders Section -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>📝</span> Executive Priority Reminders &amp; Deadlines
+        </div>
+        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="addReminderRow()">+ Add Reminder</button>
+      </div>
+
+      <div id="reminders-list">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // Initialize date picker to today
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('agenda-date');
+    dateInput.value = todayStr;
+
+    dateInput.addEventListener('change', () => {
+      loadAgenda();
+    });
+
+    function showToast(msg, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      toast.style.display = 'flex';
+      toast.style.borderColor = isSuccess ? '#10B981' : '#EF4444';
+      toast.innerHTML = (isSuccess ? '✅ ' : '❌ ') + msg;
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3500);
+    }
+
+    async function checkStatus() {
+      try {
+        const res = await fetch('/status');
+        const data = await res.json();
+        const badge = document.getElementById('gateway-status');
+        if (data.whatsapp_connected) {
+          badge.textContent = 'WhatsApp Gateway Active';
+        } else {
+          badge.textContent = 'WhatsApp QR Needed';
+          badge.style.color = '#F59E0B';
+        }
+      } catch (e) {
+        document.getElementById('gateway-status').textContent = 'Server Offline';
+      }
+    }
+
+    function createMeetingElement(m = {}) {
+      const div = document.createElement('div');
+      div.className = 'meeting-item';
+      div.innerHTML = `
+        <div class="form-group">
+          <label>Time Slot</label>
+          <input type="text" class="form-control m-time" placeholder="10:00 AM - 11:00 AM" value="${m.time || ''}">
+        </div>
+        <div class="form-group">
+          <label>Meeting &amp; Agenda</label>
+          <input type="text" class="form-control m-title" placeholder="e.g. Academic Council Review" value="${m.title || ''}">
+          <input type="text" class="form-control m-notes" placeholder="Prep Notes / Action item" value="${m.notes || ''}" style="margin-top: 6px; font-size: 12px;">
+        </div>
+        <div class="form-group">
+          <label>Location &amp; Attendees</label>
+          <input type="text" class="form-control m-loc" placeholder="Board Room / Hybrid" value="${m.location || ''}">
+          <input type="text" class="form-control m-att" placeholder="HODs, Dean Academics" value="${m.attendees || ''}" style="margin-top: 6px; font-size: 12px;">
+        </div>
+        <div class="delete-btn-cell">
+          <button class="btn btn-danger-outline" title="Delete Meeting" onclick="this.closest('.meeting-item').remove()">✕</button>
+        </div>
+      `;
+      return div;
+    }
+
+    function addMeetingRow(m) {
+      document.getElementById('meetings-list').appendChild(createMeetingElement(m));
+    }
+
+    function createReminderElement(text = '') {
+      const div = document.createElement('div');
+      div.className = 'reminder-item';
+      div.innerHTML = `
+        <input type="text" class="form-control r-text" placeholder="e.g. Sign NAAC accreditation compliance certificates before 3:00 PM" value="${text}">
+        <button class="btn btn-danger-outline" onclick="this.closest('.reminder-item').remove()">✕</button>
+      `;
+      return div;
+    }
+
+    function addReminderRow(text) {
+      document.getElementById('reminders-list').appendChild(createReminderElement(text));
+    }
+
+    async function loadAgenda() {
+      const date = dateInput.value;
+      try {
+        const res = await fetch(`/api/pa/schedule?date=${date}`);
+        const data = await res.json();
+
+        const mList = document.getElementById('meetings-list');
+        const rList = document.getElementById('reminders-list');
+        mList.innerHTML = '';
+        rList.innerHTML = '';
+
+        if (data.meetings && data.meetings.length > 0) {
+          data.meetings.forEach(m => addMeetingRow(m));
+        } else {
+          addMeetingRow(); // empty row
+        }
+
+        if (data.reminders && data.reminders.length > 0) {
+          data.reminders.forEach(r => addReminderRow(r));
+        } else {
+          addReminderRow(); // empty row
+        }
+
+        showToast(`Loaded schedule for ${date}`);
+      } catch (e) {
+        showToast('Failed to load schedule from server', false);
+      }
+    }
+
+    function collectData() {
+      const date = dateInput.value;
+      const meetingRows = document.querySelectorAll('.meeting-item');
+      const meetings = [];
+      meetingRows.forEach(row => {
+        const time = row.querySelector('.m-time').value.trim();
+        const title = row.querySelector('.m-title').value.trim();
+        const notes = row.querySelector('.m-notes').value.trim();
+        const location = row.querySelector('.m-loc').value.trim();
+        const attendees = row.querySelector('.m-att').value.trim();
+        if (time || title) {
+          meetings.push({ time, title, notes, location, attendees });
+        }
+      });
+
+      const reminderRows = document.querySelectorAll('.reminder-item');
+      const reminders = [];
+      reminderRows.forEach(row => {
+        const text = row.querySelector('.r-text').value.trim();
+        if (text) reminders.push(text);
+      });
+
+      return { date, meetings, reminders };
+    }
+
+    async function saveAgenda(silent = false) {
+      const payload = collectData();
+      try {
+        const res = await fetch('/api/pa/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.success) {
+          if (!silent) showToast('PA Schedule successfully saved!');
+          return true;
+        } else {
+          showToast('Failed to save schedule: ' + (result.error || ''), false);
+          return false;
+        }
+      } catch (e) {
+        showToast('Network error saving schedule', false);
+        return false;
+      }
+    }
+
+    async function saveAndDispatch() {
+      const btn = document.getElementById('dispatch-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Compiling & Dispatching...';
+
+      const saved = await saveAgenda(true);
+      if (!saved) {
+        btn.disabled = false;
+        btn.textContent = '🚀 Save & Dispatch Briefing';
+        return;
+      }
+
+      const date = dateInput.value;
+      try {
+        const res = await fetch('/api/pa/trigger-briefing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date })
+        });
+        const result = await res.json();
+        if (result.success) {
+          showToast('Briefing triggered! Delivering to WhatsApp...');
+        } else {
+          showToast('Error: ' + (result.error || 'Failed to trigger'), false);
+        }
+      } catch (e) {
+        showToast('Error communicating with dispatch server', false);
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = '🚀 Save & Dispatch Briefing';
+        }, 3000);
+      }
+    }
+
+    // Run on startup
+    checkStatus();
+    loadAgenda();
+  </script>
+</body>
+</html>

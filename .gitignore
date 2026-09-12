@@ -24,3 +24,4 @@ PyWhatKit_DB.txt
 reports/
 *.pdf
 .scheduler_state.json
+cloudflared.exe
