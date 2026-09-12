@@ -22,6 +22,35 @@
           "Finalize faculty duty leave approvals for International Robotics Symposium"
         ]
       }
+    },
+    {
+      "dispatched_at": "2026-09-12T14:57:32.492566",
+      "agenda": {
+        "meetings": [
+          {
+            "time": "9:45",
+            "title": "acadmic meeting",
+            "notes": "",
+            "attendees": ""
+          },
+          {
+            "time": "11:40",
+            "title": "student meeting",
+            "notes": "",
+            "attendees": ""
+          },
+          {
+            "time": "10:45",
+            "title": "council meating",
+            "notes": "",
+            "attendees": ""
+          }
+        ],
+        "reminders": [
+          "Sign and endorse state scholarship merit-cum-means applications by 3:00 PM",
+          "Finalize faculty duty leave approvals for International Robotics Symposium"
+        ]
+      }
     }
   ]
 }
