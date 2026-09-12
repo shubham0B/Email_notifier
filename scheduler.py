@@ -83,8 +83,7 @@ def run_digest_job(mode: str = "today"):
 
     ensure_gateway_started()
 
-    flag = "--today" if mode == "today" else "--yesterday"
-    cmd = [sys.executable, "-X", "utf8", "main.py", "--live", flag, "--gateway"]
+    cmd = [sys.executable, "-X", "utf8", "main.py", "--live", "--gateway"]
 
     try:
         res = subprocess.run(cmd, cwd=PROJECT_DIR, capture_output=True, text=True, encoding="utf-8")
@@ -105,7 +104,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Automated Email Digest Scheduler with Smart Catch-Up")
     parser.add_argument("--now", action="store_true", help="Run the digest immediately and exit")
-    parser.add_argument("--morning", type=str, default="09:00", help="Time for morning digest (HH:MM 24h, default 09:00)")
+    default_briefing_time = os.getenv("SCHEDULED_BRIEFING_TIME", "09:00")
+    parser.add_argument("--morning", type=str, default=default_briefing_time, help=f"Time for morning digest (HH:MM 24h, default {default_briefing_time})")
     parser.add_argument("--evening", type=str, default="20:00", help="Time for evening digest (HH:MM 24h, default 20:00)")
     parser.add_argument("--interval-hours", type=int, default=None, help="Run periodically every N hours")
     args = parser.parse_args()

@@ -1,7 +1,15 @@
 import os
+import sys
 import json
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(PROJECT_DIR, "data")
@@ -81,6 +89,50 @@ def set_pa_agenda(target_date: str, meetings: List[Dict[str, str]], reminders: L
         "reminders": reminders or []
     }
     save_all_schedules(store)
+
+def archive_and_reset_pa_agenda(target_date: Optional[str] = None):
+    """
+    Archives completed PA schedule to data/pa_schedule_history.json and resets 
+    the active schedule file so the PA starts fresh for the next cycle.
+    """
+    if not target_date:
+        target_date = datetime.now().strftime("%Y-%m-%d")
+    
+    _ensure_data_file()
+    store = load_all_schedules()
+    active_agenda = store.get(target_date, {"meetings": [], "reminders": []})
+
+    # Only archive if there was actually schedule data
+    if active_agenda.get("meetings") or active_agenda.get("reminders"):
+        history_file = os.path.join(DATA_DIR, "pa_schedule_history.json")
+        history = {}
+        if os.path.exists(history_file):
+            try:
+                with open(history_file, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except Exception:
+                history = {}
+        
+        now_str = datetime.now().isoformat()
+        if target_date not in history:
+            history[target_date] = []
+        history[target_date].append({
+            "dispatched_at": now_str,
+            "agenda": active_agenda
+        })
+        try:
+            with open(history_file, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ Warning: Could not write schedule history: {e}")
+
+    # Reset the active schedule for this date so new schedule starts fresh
+    store[target_date] = {
+        "meetings": [],
+        "reminders": []
+    }
+    save_all_schedules(store)
+    print(f"✅ Active PA schedule for {target_date} has been archived and reset for the next cycle.")
 
 if __name__ == "__main__":
     today = datetime.now().strftime("%Y-%m-%d")

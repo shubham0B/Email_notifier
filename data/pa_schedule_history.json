@@ -1,0 +1,27 @@
+{
+  "2026-09-12": [
+    {
+      "dispatched_at": "2026-09-12T14:53:02.904045",
+      "agenda": {
+        "meetings": [
+          {
+            "time": "9:45",
+            "title": "tarun",
+            "notes": "",
+            "attendees": ""
+          },
+          {
+            "time": "11:40",
+            "title": "raghav",
+            "notes": "",
+            "attendees": ""
+          }
+        ],
+        "reminders": [
+          "Sign and endorse state scholarship merit-cum-means applications by 3:00 PM",
+          "Finalize faculty duty leave approvals for International Robotics Symposium"
+        ]
+      }
+    }
+  ]
+}
