@@ -381,9 +381,11 @@
       }, 3500);
     }
 
+    const basePath = window.location.pathname.startsWith('/personal') ? '/personal' : '';
+
     async function checkStatus() {
       try {
-        const res = await fetch('/status');
+        const res = await fetch(`${basePath}/status`);
         const data = await res.json();
         const badge = document.getElementById('gateway-status');
         if (data.whatsapp_connected) {
@@ -442,7 +444,7 @@
     async function loadAgenda() {
       const date = dateInput.value;
       try {
-        const res = await fetch(`/api/pa/schedule?date=${date}`);
+        const res = await fetch(`${basePath}/api/pa/schedule?date=${date}`);
         const data = await res.json();
 
         const mList = document.getElementById('meetings-list');
@@ -495,7 +497,7 @@
     async function saveAgenda(silent = false) {
       const payload = collectData();
       try {
-        const res = await fetch('/api/pa/schedule', {
+        const res = await fetch(`${basePath}/api/pa/schedule`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -528,7 +530,7 @@
 
       const date = dateInput.value;
       try {
-        const res = await fetch('/api/pa/trigger-briefing', {
+        const res = await fetch(`${basePath}/api/pa/trigger-briefing`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ date })

@@ -65,6 +65,9 @@ async function connectToWhatsApp() {
 
 // Health check & status endpoints
 app.get(['/', '/personal'], (req, res) => {
+    if (req.headers.accept && req.headers.accept.includes('text/html')) {
+        return res.sendFile(path.join(path.resolve(), 'public', 'pa_portal.html'));
+    }
     res.json({ 
         service: "JECRC Personal WhatsApp Gateway",
         online: true,
@@ -177,12 +180,12 @@ const SCHEDULE_FILE = path.join(path.resolve(), '..', 'data', 'pa_schedule.json'
 // Serve static assets from public/
 app.use(express.static(path.join(path.resolve(), 'public')));
 
-app.get('/pa', (req, res) => {
+app.get(['/pa', '/personal/pa'], (req, res) => {
     res.sendFile(path.join(path.resolve(), 'public', 'pa_portal.html'));
 });
 
 // GET PA schedule for target date
-app.get('/api/pa/schedule', (req, res) => {
+app.get(['/api/pa/schedule', '/pa/schedule'], (req, res) => {
     const targetDate = req.query.date || new Date().toISOString().split('T')[0];
     try {
         if (fs.existsSync(SCHEDULE_FILE)) {
@@ -196,7 +199,7 @@ app.get('/api/pa/schedule', (req, res) => {
 });
 
 // POST update PA schedule
-app.post('/api/pa/schedule', (req, res) => {
+app.post(['/api/pa/schedule', '/pa/schedule'], (req, res) => {
     const { date, meetings, reminders } = req.body;
     if (!date) {
         return res.status(400).json({ error: 'Date is required.' });
@@ -226,7 +229,7 @@ app.post('/api/pa/schedule', (req, res) => {
 });
 
 // Trigger daily briefing on-demand from PA portal
-app.post('/api/pa/trigger-briefing', (req, res) => {
+app.post(['/api/pa/trigger-briefing', '/pa/trigger-briefing'], (req, res) => {
     const targetDate = req.body.date || new Date().toISOString().split('T')[0];
     const projectRoot = path.resolve('..');
 
