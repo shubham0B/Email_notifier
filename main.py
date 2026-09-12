@@ -65,7 +65,7 @@ def main():
     
     # Check if local gateway is running and ready
     gateway_ready = False
-    gateway_port = os.getenv("PORT", os.getenv("GATEWAY_PORT", "4020"))
+    gateway_port = os.getenv("GATEWAY_PORT", os.getenv("PORT", "3000"))
     try:
         import requests
         r = requests.get(f"http://127.0.0.1:{gateway_port}/status", timeout=2)

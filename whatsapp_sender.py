@@ -138,7 +138,7 @@ def send_via_whatsapp_web(body: str, to_number: str = None) -> Dict[str, Any]:
         return {"status": "error", "error": str(e)}
 
 def get_gateway_url() -> str:
-    port = os.getenv("PORT", os.getenv("GATEWAY_PORT", "4020"))
+    port = os.getenv("GATEWAY_PORT", os.getenv("PORT", "3000"))
     return f"http://127.0.0.1:{port}"
 
 def ensure_gateway_running() -> bool:

@@ -12,7 +12,7 @@ import pino from 'pino';
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-const PORT = process.env.PORT || 4020;
+const PORT = process.env.PORT || 3000;
 let sock = null;
 let isConnected = false;
 let latestQrCode = null;
