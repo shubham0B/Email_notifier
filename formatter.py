@@ -66,11 +66,13 @@ def build_whatsapp_digest(
                 for m in pa_agenda["meetings"]:
                     m_time = m.get("time", "").strip()
                     m_title = m.get("title", "").strip()
-                    m_loc = m.get("location", "").strip()
-                    loc_str = f" ({m_loc})" if m_loc else ""
-                    empty_lines.append(f"⏱️ *{m_time}* - *{m_title}*{loc_str}")
-                    if m.get("notes"):
-                        empty_lines.append(f"   ↳ _{m['notes']}_")
+                    m_att = m.get("attendees", "").strip()
+                    m_notes = m.get("notes", "").strip()
+                    empty_lines.append(f"⏱️ *{m_time}* - *{m_title}*")
+                    if m_att:
+                        empty_lines.append(f"   👥 _{m_att}_")
+                    if m_notes:
+                        empty_lines.append(f"   ↳ _{m_notes}_")
             if pa_agenda.get("reminders"):
                 empty_lines.append("\n📝 *Executive Reminders & Tasks:*")
                 for rem in pa_agenda["reminders"]:
@@ -112,10 +114,11 @@ def build_whatsapp_digest(
             for m in pa_agenda["meetings"]:
                 m_time = m.get("time", "").strip()
                 m_title = m.get("title", "").strip()
-                m_loc = m.get("location", "").strip()
+                m_att = m.get("attendees", "").strip()
                 m_notes = m.get("notes", "").strip()
-                loc_str = f" ({m_loc})" if m_loc else ""
-                lines.append(f"⏱️ *{m_time}* - *{m_title}*{loc_str}")
+                lines.append(f"⏱️ *{m_time}* - *{m_title}*")
+                if m_att:
+                    lines.append(f"   👥 _{m_att}_")
                 if m_notes:
                     lines.append(f"   ↳ _{m_notes}_")
         if pa_agenda.get("reminders"):

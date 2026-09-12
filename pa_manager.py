@@ -17,21 +17,18 @@ def _ensure_data_file():
                     {
                         "time": "10:00 AM - 11:00 AM",
                         "title": "Academic Council & Curriculum Review",
-                        "location": "Board Room / Hybrid",
                         "attendees": "Department HODs, Dean Academics",
                         "notes": "Review draft curriculum changes for autonomous accreditation"
                     },
                     {
                         "time": "02:30 PM - 03:15 PM",
                         "title": "Budget Review & Vendor Sign-off",
-                        "location": "Dean's Office",
                         "attendees": "Finance Officer, Borosil Supplies",
                         "notes": "Sign off on cleared Chemistry Lab invoice (Rs 4,80,000)"
                     },
                     {
                         "time": "04:30 PM - 05:00 PM",
                         "title": "VIP Briefing: State University Registrar",
-                        "location": "Directorate Committee Room",
                         "attendees": "State University Registrar, Dean",
                         "notes": "Review readiness for NAAC Peer Team inspection"
                     }

@@ -240,14 +240,12 @@ def generate_digest_pdf(
                 [
                     Paragraph("<b>TIME</b>", ParagraphStyle('TH1', parent=item_title_style, textColor=colors.white, fontSize=8)),
                     Paragraph("<b>MEETING &amp; AGENDA</b>", ParagraphStyle('TH2', parent=item_title_style, textColor=colors.white, fontSize=8)),
-                    Paragraph("<b>LOCATION / MODE</b>", ParagraphStyle('TH3', parent=item_title_style, textColor=colors.white, fontSize=8)),
-                    Paragraph("<b>ATTENDEES &amp; PREP NOTES</b>", ParagraphStyle('TH4', parent=item_title_style, textColor=colors.white, fontSize=8))
+                    Paragraph("<b>KEY ATTENDEES &amp; PREP NOTES</b>", ParagraphStyle('TH3', parent=item_title_style, textColor=colors.white, fontSize=8))
                 ]
             ]
             for m in meetings:
                 t_str = clean_pdf_text(m.get("time", "TBD"))
                 title_str = clean_pdf_text(m.get("title", "Meeting"))
-                loc_str = clean_pdf_text(m.get("location", "Dean Office"))
                 att_str = clean_pdf_text(m.get("attendees", ""))
                 notes_str = clean_pdf_text(m.get("notes", ""))
                 
@@ -258,11 +256,10 @@ def generate_digest_pdf(
                 table_data.append([
                     Paragraph(f"<b>{t_str}</b>", item_body_style),
                     Paragraph(f"<b>{title_str}</b>", item_title_style),
-                    Paragraph(loc_str, item_body_style),
                     Paragraph(details or "-", item_body_style)
                 ])
 
-            t = Table(table_data, colWidths=[1.2 * inch, 2.3 * inch, 1.5 * inch, 2.5 * inch])
+            t = Table(table_data, colWidths=[1.3 * inch, 3.2 * inch, 3.0 * inch])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),

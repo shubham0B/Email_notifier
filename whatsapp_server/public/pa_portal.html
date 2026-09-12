@@ -224,7 +224,7 @@
       padding: 16px;
       margin-bottom: 14px;
       display: grid;
-      grid-template-columns: 140px 1fr 180px 40px;
+      grid-template-columns: 140px 1fr 220px 40px;
       gap: 14px;
       align-items: start;
     }
@@ -411,9 +411,8 @@
           <input type="text" class="form-control m-notes" placeholder="Prep Notes / Action item" value="${m.notes || ''}" style="margin-top: 6px; font-size: 12px;">
         </div>
         <div class="form-group">
-          <label>Location &amp; Attendees</label>
-          <input type="text" class="form-control m-loc" placeholder="Board Room / Hybrid" value="${m.location || ''}">
-          <input type="text" class="form-control m-att" placeholder="HODs, Dean Academics" value="${m.attendees || ''}" style="margin-top: 6px; font-size: 12px;">
+          <label>Key Attendees</label>
+          <input type="text" class="form-control m-att" placeholder="e.g. HODs, Dean Academics" value="${m.attendees || ''}">
         </div>
         <div class="delete-btn-cell">
           <button class="btn btn-danger-outline" title="Delete Meeting" onclick="this.closest('.meeting-item').remove()">✕</button>
@@ -477,10 +476,9 @@
         const time = row.querySelector('.m-time').value.trim();
         const title = row.querySelector('.m-title').value.trim();
         const notes = row.querySelector('.m-notes').value.trim();
-        const location = row.querySelector('.m-loc').value.trim();
         const attendees = row.querySelector('.m-att').value.trim();
         if (time || title) {
-          meetings.push({ time, title, notes, location, attendees });
+          meetings.push({ time, title, notes, attendees });
         }
       });
 

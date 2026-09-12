@@ -4,21 +4,18 @@
       {
         "time": "10:00 AM - 11:00 AM",
         "title": "Academic Council & Curriculum Review",
-        "location": "Board Room / Hybrid",
         "attendees": "Department HODs, Dean Academics",
         "notes": "Review draft curriculum changes for autonomous accreditation"
       },
       {
         "time": "02:30 PM - 03:15 PM",
         "title": "Budget Review & Vendor Sign-off",
-        "location": "Dean's Office",
         "attendees": "Finance Officer, Borosil Supplies",
         "notes": "Sign off on cleared Chemistry Lab invoice (Rs 4,80,000)"
       },
       {
         "time": "04:30 PM - 05:00 PM",
         "title": "VIP Briefing: State University Registrar",
-        "location": "Directorate Committee Room",
         "attendees": "State University Registrar, Dean",
         "notes": "Review readiness for NAAC Peer Team inspection"
       }
@@ -27,5 +24,22 @@
       "Sign and endorse state scholarship merit-cum-means applications by 3:00 PM",
       "Finalize faculty duty leave approvals for International Robotics Symposium"
     ]
+  },
+  "2026-09-21": {
+    "meetings": [
+      {
+        "time": "8:39",
+        "title": "shubham",
+        "notes": "",
+        "attendees": ""
+      },
+      {
+        "time": "13:50",
+        "title": "sharma",
+        "notes": "",
+        "attendees": ""
+      }
+    ],
+    "reminders": []
   }
 }
