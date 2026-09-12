@@ -51,6 +51,28 @@
           "Finalize faculty duty leave approvals for International Robotics Symposium"
         ]
       }
+    },
+    {
+      "dispatched_at": "2026-09-12T15:03:43.857051",
+      "agenda": {
+        "meetings": [
+          {
+            "time": "9:00",
+            "title": "council meeting",
+            "notes": "",
+            "attendees": ""
+          },
+          {
+            "time": "10:00",
+            "title": "student meeting",
+            "notes": "",
+            "attendees": ""
+          }
+        ],
+        "reminders": [
+          "yuvraj is hero"
+        ]
+      }
     }
   ]
 }
