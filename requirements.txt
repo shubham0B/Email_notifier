@@ -4,3 +4,5 @@ python-dotenv>=1.0.0
 google-genai>=0.1.1
 twilio>=8.10.0
 reportlab>=4.0.0
+pymysql>=1.1.0
+cryptography>=41.0.0

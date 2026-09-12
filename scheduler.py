@@ -37,9 +37,10 @@ def save_state(state: dict):
         print(f"Warning: Could not save scheduler state: {e}")
 
 def is_gateway_running() -> bool:
-    """Checks if the local WhatsApp gateway on port 3000 is online and connected."""
+    """Checks if the local WhatsApp gateway is online and connected."""
+    port = os.getenv("PORT", os.getenv("GATEWAY_PORT", "4020"))
     try:
-        r = requests.get("http://127.0.0.1:3000/status", timeout=3)
+        r = requests.get(f"http://127.0.0.1:{port}/status", timeout=3)
         return r.status_code == 200 and r.json().get("whatsapp_connected", False)
     except Exception:
         return False

@@ -22,6 +22,7 @@ from whatsapp_sender import (
     send_via_local_gateway,
     send_document_via_gateway
 )
+from db import save_digest_run
 
 def main():
     load_dotenv()
@@ -64,9 +65,10 @@ def main():
     
     # Check if local gateway is running and ready
     gateway_ready = False
+    gateway_port = os.getenv("PORT", os.getenv("GATEWAY_PORT", "4020"))
     try:
         import requests
-        r = requests.get("http://127.0.0.1:3000/status", timeout=2)
+        r = requests.get(f"http://127.0.0.1:{gateway_port}/status", timeout=2)
         if r.status_code == 200 and r.json().get("whatsapp_connected"):
             gateway_ready = True
     except Exception:
@@ -156,6 +158,19 @@ def main():
     print("\n[Step 3b/4] Fetching Tech & Higher Education news headlines and generating PDF document...")
     news_data = fetch_important_news()
     pdf_path = generate_digest_pdf(processed_emails, news_data, digest_date_str=digest_date_str, file_date_str=file_date_str)
+
+    # Record digest into personal_whatsapp_db
+    try:
+        mode_str = "range" if is_range else (target_date or "today")
+        save_digest_run(
+            target_date=file_date_str,
+            mode=mode_str,
+            processed_emails=processed_emails,
+            news_data=news_data,
+            pdf_path=pdf_path
+        )
+    except Exception as e:
+        print(f"⚠️ Could not record run to MySQL: {e}")
 
     # 4. Dispatch
     if use_gateway:

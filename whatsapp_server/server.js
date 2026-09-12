@@ -12,9 +12,10 @@ import pino from 'pino';
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-const PORT = 3000;
+const PORT = process.env.PORT || 4020;
 let sock = null;
 let isConnected = false;
+let latestQrCode = null;
 const messageStore = new Map();
 
 async function connectToWhatsApp() {
@@ -62,11 +63,23 @@ async function connectToWhatsApp() {
     sock.ev.on('creds.update', saveCreds);
 }
 
-// Health check endpoint
-app.get('/status', (req, res) => {
+// Health check & status endpoints
+app.get(['/', '/personal'], (req, res) => {
+    res.json({ 
+        service: "JECRC Personal WhatsApp Gateway",
+        online: true,
+        whatsapp_connected: isConnected,
+        status: isConnected ? "CONNECTED" : "WAITING_FOR_QR_SCAN",
+        port: PORT
+    });
+});
+
+app.get(['/status', '/personal/status'], (req, res) => {
     res.json({ 
         online: true, 
-        whatsapp_connected: isConnected 
+        whatsapp_connected: isConnected,
+        status: isConnected ? "CONNECTED" : "WAITING_FOR_QR_SCAN",
+        port: PORT
     });
 });
 
