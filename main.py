@@ -187,13 +187,12 @@ def main():
     except Exception as e:
         print(f"⚠️ Could not record run to MySQL: {e}")
 
-    # 4. Dispatch
+    # 4. Dispatch (Delivers only the comprehensive Executive PDF document)
     if use_gateway:
-        print("\n[Step 4/4] Delivering digest and PDF document via Local WhatsApp Gateway (Silent/Headless)...")
-        send_via_local_gateway(digest_message)
+        print("\n[Step 4/4] Delivering Executive PDF document via Local WhatsApp Gateway...")
         send_document_via_gateway(
             pdf_path, 
-            caption=f"📄 *Executive Briefing Document ({digest_date_str or 'Today'})*\n• Today's Executive Schedule & Appointments\n• Inbound Email Action Summaries\n• Tech & AI Breakthroughs (1-Day Previous)\n• Higher Education Intelligence (India, Global & Rajasthan)"
+            caption=f"📄 *Daily Executive Briefing - {digest_date_str or 'Today'}*"
         )
     elif args.web:
         print("\n[Step 4/4] Delivering digest via WhatsApp Web...")
