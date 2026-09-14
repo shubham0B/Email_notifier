@@ -237,6 +237,15 @@
         ],
         "reminders": []
       }
+    },
+    {
+      "dispatched_at": "2026-09-14T15:48:39.413448",
+      "agenda": {
+        "meetings": [],
+        "reminders": [
+          "meeting at vib 401 at 4:50 pm"
+        ]
+      }
     }
   ]
 }
