@@ -244,7 +244,8 @@ def generate_digest_pdf(
                 ]
             ]
             for m in meetings:
-                t_str = clean_pdf_text(m.get("time", "TBD"))
+                from pa_manager import format_time_to_12h
+                t_str = clean_pdf_text(format_time_to_12h(m.get("time", "TBD")))
                 title_str = clean_pdf_text(m.get("title", "Meeting"))
                 att_str = clean_pdf_text(m.get("attendees", ""))
                 notes_str = clean_pdf_text(m.get("notes", ""))
@@ -319,9 +320,11 @@ def generate_digest_pdf(
                 time_str = clean_pdf_text(format_time_stamp(item.get("timestamp", "")))
                 sender_name = clean_pdf_text(item.get("sender_name") or item.get("sender") or "Unknown")
                 summary = clean_pdf_text(item.get("summary") or item.get("subject") or "No description.")
+                gmail_link = item.get("gmail_link", "")
 
+                link_html = f"&nbsp;&nbsp;<a href='{gmail_link}'><font color='#2563EB'><u><b>[Open in Gmail ↗]</b></u></font></a>" if gmail_link else ""
                 content = [
-                    Paragraph(f"<b>{time_str} {sender_name}:</b> {summary}", item_body_style)
+                    Paragraph(f"<b>{time_str} {sender_name}:</b> {summary}{link_html}", item_body_style)
                 ]
                 table_data.append([content])
 
@@ -348,13 +351,15 @@ def generate_digest_pdf(
             summary = clean_pdf_text(n.get("summary", ""))
             source = clean_pdf_text(n.get("source", "News Desk"))
             time_tag = clean_pdf_text(n.get("pub_date", "Today"))
+            news_url = n.get("link", "")
             
+            link_html = f"&nbsp;|&nbsp;<a href='{news_url}'><font color='#2563EB'><u><b>Read Article ↗</b></u></font></a>" if news_url else ""
             cell_content = [
                 Paragraph(f"<b>{title}</b>", item_title_style)
             ]
             if summary:
                 cell_content.append(Paragraph(f"<font color='#1E293B' size='8.5'>{summary}</font>", item_body_style))
-            cell_content.append(Paragraph(f"<font color='#64748B' size='7.5'>Source: {source}  |  {time_tag}</font>", item_body_style))
+            cell_content.append(Paragraph(f"<font color='#64748B' size='7.5'>Source: {source}  |  {time_tag}{link_html}</font>", item_body_style))
             table_rows.append([cell_content])
 
         t = Table(table_rows, colWidths=[7.2 * inch])

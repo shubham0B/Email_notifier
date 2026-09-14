@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+        sys.stderr.reconfigure(encoding="utf-8", line_buffering=True)
     except Exception:
         pass
 
@@ -38,7 +38,7 @@ def save_state(state: dict):
 
 def is_gateway_running() -> bool:
     """Checks if the local WhatsApp gateway is online and connected."""
-    port = os.getenv("PORT", os.getenv("GATEWAY_PORT", "4020"))
+    port = os.getenv("PORT", os.getenv("GATEWAY_PORT", "3000"))
     try:
         r = requests.get(f"http://127.0.0.1:{port}/status", timeout=3)
         return r.status_code == 200 and r.json().get("whatsapp_connected", False)
@@ -78,7 +78,7 @@ def ensure_gateway_started():
 def run_digest_job(mode: str = "today"):
     """Executes the email digest pipeline and sends to WhatsApp."""
     print("\n" + "=" * 60)
-    print(f"⏰ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] TRIGGERING DIGEST DISPATCH ({mode.upper()})")
+    print(f"⏰ [{datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')}] TRIGGERING DIGEST DISPATCH ({mode.upper()})")
     print("=" * 60)
 
     ensure_gateway_started()
@@ -95,18 +95,34 @@ def run_digest_job(mode: str = "today"):
         print(f"❌ Failed to run digest job: {e}")
 
 def parse_hm(time_str: str) -> dtime:
-    """Parses HH:MM into a time object."""
-    h, m = map(int, time_str.strip().split(":"))
-    return dtime(hour=h, minute=m)
+    """Parses time string (supports 24h '14:30' and 12h '02:30 PM') into a time object."""
+    clean = time_str.strip()
+    for fmt in ("%I:%M %p", "%I:%M%p", "%H:%M"):
+        try:
+            return datetime.strptime(clean, fmt).time()
+        except ValueError:
+            pass
+    import re
+    m = re.match(r'^(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?$', clean)
+    if m:
+        h = int(m.group(1))
+        mins = int(m.group(2))
+        ampm = m.group(3)
+        if ampm:
+            if ampm.upper() == 'PM' and h < 12:
+                h += 12
+            elif ampm.upper() == 'AM' and h == 12:
+                h = 0
+        return dtime(hour=h, minute=mins)
+    return dtime(hour=9, minute=0)
 
 def main():
     load_dotenv()
     import argparse
-    parser = argparse.ArgumentParser(description="Automated Email Digest Scheduler with Smart Catch-Up")
+    parser = argparse.ArgumentParser(description="Automated Email Digest Scheduler (Single Daily Briefing)")
     parser.add_argument("--now", action="store_true", help="Run the digest immediately and exit")
     default_briefing_time = os.getenv("SCHEDULED_BRIEFING_TIME", "09:00")
-    parser.add_argument("--morning", type=str, default=default_briefing_time, help=f"Time for morning digest (HH:MM 24h, default {default_briefing_time})")
-    parser.add_argument("--evening", type=str, default="20:00", help="Time for evening digest (HH:MM 24h, default 20:00)")
+    parser.add_argument("--time", type=str, default=default_briefing_time, help=f"Time for daily digest (default {default_briefing_time})")
     parser.add_argument("--interval-hours", type=int, default=None, help="Run periodically every N hours")
     args = parser.parse_args()
 
@@ -115,19 +131,23 @@ def main():
     if args.now:
         print("⚡ Executing immediate digest dispatch...")
         run_digest_job(mode="today")
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        state = load_state()
+        state["last_daily_run"] = today_date
+        save_state(state)
         return
 
-    morning_time = parse_hm(args.morning)
-    evening_time = parse_hm(args.evening)
+    briefing_time = parse_hm(args.time)
+    display_time = briefing_time.strftime("%I:%M %p")
 
     print("=" * 60)
-    print("🤖 AUTOMATED WHATSAPP DIGEST SCHEDULER (SMART CATCH-UP ENABLED)")
+    print("🤖 AUTOMATED WHATSAPP DIGEST SCHEDULER (SINGLE DAILY REPORT)")
     if args.interval_hours:
         print(f"🔁 Mode: Periodic interval every {args.interval_hours} hour(s)")
     else:
-        print(f"📅 Daily Schedules -> Morning: {args.morning} | Evening: {args.evening}")
-        print("💡 Smart Catch-up: If your PC was off during a scheduled time,")
-        print("   it will trigger automatically upon boot/start.")
+        print(f"📅 Daily Briefing Schedule: {display_time} (Exactly 1 report per day)")
+        print("💡 Smart Catch-up: If your PC was off during the scheduled time,")
+        print("   it will trigger once upon boot/start for the day.")
     print("⚡ Press Ctrl+C at any time to stop.")
     print("=" * 60)
 
@@ -152,32 +172,22 @@ def main():
 
             time.sleep(60)
 
-    # Daily scheduled times (Morning & Evening) with Smart Catch-up
+    # Single Daily scheduled time with Smart Catch-up
     while True:
         now = datetime.now()
         cur_time = now.time()
         today_date = now.strftime("%Y-%m-%d")
         state = load_state()
 
-        # Check if Evening Digest is due or missed
-        if cur_time >= evening_time:
-            if state.get("last_evening_run") != today_date:
-                print(f"\n🔔 [Smart Catch-Up / Schedule] Triggering evening digest for {today_date}...")
+        # Check if the single daily digest is due or missed today
+        if cur_time >= briefing_time:
+            if state.get("last_daily_run") != today_date and state.get("last_morning_run") != today_date:
+                print(f"\n🔔 [Schedule] Triggering single daily digest for {today_date}...")
                 run_digest_job(mode="today")
-                state["last_evening_run"] = today_date
-                # If morning was also missed earlier, mark it so we don't send yesterday's digest late at night
-                state["last_morning_run"] = today_date
+                state["last_daily_run"] = today_date
                 save_state(state)
 
-        # Check if Morning Digest is due or missed (between morning and evening cutoff)
-        elif cur_time >= morning_time:
-            if state.get("last_morning_run") != today_date:
-                print(f"\n🔔 [Smart Catch-Up / Schedule] Triggering morning digest for {today_date}...")
-                run_digest_job(mode="yesterday")
-                state["last_morning_run"] = today_date
-                save_state(state)
-
-        time.sleep(25)  # Check every 25 seconds
+        time.sleep(30)  # Check every 30 seconds
 
 if __name__ == "__main__":
     main()

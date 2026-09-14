@@ -322,6 +322,7 @@
       <div class="date-picker-group">
         <label for="agenda-date">AGENDA DATE:</label>
         <input type="date" id="agenda-date" class="date-input">
+        <span id="autosave-status" style="font-size: 12px; color: #10B981; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-left: 8px;">✓ All changes saved</span>
       </div>
       <div class="btn-group">
         <button class="btn btn-outline" id="load-btn" onclick="loadAgenda()">🔄 Refresh</button>
@@ -336,7 +337,7 @@
         <div class="card-title">
           <span>📅</span> Scheduled Meetings &amp; Appointments
         </div>
-        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="addMeetingRow()">+ Add Meeting</button>
+        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="addMeetingRow(); triggerAutoSave();">+ Add Meeting</button>
       </div>
 
       <div id="meetings-list">
@@ -350,7 +351,7 @@
         <div class="card-title">
           <span>📝</span> Executive Priority Reminders &amp; Deadlines
         </div>
-        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="addReminderRow()">+ Add Reminder</button>
+        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="addReminderRow(); triggerAutoSave();">+ Add Reminder</button>
       </div>
 
       <div id="reminders-list">
@@ -399,13 +400,26 @@
       }
     }
 
+    function formatTimeInputTo12H(val) {
+      if (!val) return val;
+      return val.replace(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])(?:\s*([aApP][mM]))?\b/g, (match, hStr, mStr, ampmStr) => {
+        let h = parseInt(hStr, 10);
+        let m = mStr;
+        let ampm = ampmStr ? ampmStr.toUpperCase() : (h < 12 ? 'AM' : 'PM');
+        let displayH = (h === 0 || h === 12) ? 12 : (h % 12);
+        let paddedH = displayH < 10 ? '0' + displayH : displayH;
+        return `${paddedH}:${m} ${ampm}`;
+      });
+    }
+
     function createMeetingElement(m = {}) {
+      const formattedTime = formatTimeInputTo12H(m.time || '');
       const div = document.createElement('div');
       div.className = 'meeting-item';
       div.innerHTML = `
         <div class="form-group">
-          <label>Time Slot</label>
-          <input type="text" class="form-control m-time" placeholder="10:00 AM - 11:00 AM" value="${m.time || ''}">
+          <label>Time Slot (AM / PM)</label>
+          <input type="text" class="form-control m-time" placeholder="10:00 AM - 11:00 AM" value="${formattedTime}" onblur="this.value = formatTimeInputTo12H(this.value); triggerAutoSave();">
         </div>
         <div class="form-group">
           <label>Meeting &amp; Agenda</label>
@@ -417,10 +431,15 @@
           <input type="text" class="form-control m-att" placeholder="e.g. HODs, Dean Academics" value="${m.attendees || ''}">
         </div>
         <div class="delete-btn-cell">
-          <button class="btn btn-danger-outline" title="Delete Meeting" onclick="this.closest('.meeting-item').remove()">✕</button>
+          <button class="btn btn-danger-outline" title="Delete Meeting" onclick="deleteMeetingRow(this)">✕</button>
         </div>
       `;
       return div;
+    }
+
+    function deleteMeetingRow(btn) {
+      btn.closest('.meeting-item').remove();
+      triggerAutoSave();
     }
 
     function addMeetingRow(m) {
@@ -432,9 +451,14 @@
       div.className = 'reminder-item';
       div.innerHTML = `
         <input type="text" class="form-control r-text" placeholder="e.g. Sign NAAC accreditation compliance certificates before 3:00 PM" value="${text}">
-        <button class="btn btn-danger-outline" onclick="this.closest('.reminder-item').remove()">✕</button>
+        <button class="btn btn-danger-outline" onclick="deleteReminderRow(this)">✕</button>
       `;
       return div;
+    }
+
+    function deleteReminderRow(btn) {
+      btn.closest('.reminder-item').remove();
+      triggerAutoSave();
     }
 
     function addReminderRow(text) {
@@ -452,19 +476,34 @@
         mList.innerHTML = '';
         rList.innerHTML = '';
 
-        if (data.meetings && data.meetings.length > 0) {
-          data.meetings.forEach(m => addMeetingRow(m));
+        let meetings = (data && data.meetings && data.meetings.length > 0) ? data.meetings : [];
+        let reminders = (data && data.reminders && data.reminders.length > 0) ? data.reminders : [];
+
+        // Fallback to local draft if server has no items yet
+        if (meetings.length === 0 && reminders.length === 0) {
+          const draftStr = localStorage.getItem('pa_schedule_' + date);
+          if (draftStr) {
+            try {
+              const draft = JSON.parse(draftStr);
+              if (draft.meetings && draft.meetings.length > 0) meetings = draft.meetings;
+              if (draft.reminders && draft.reminders.length > 0) reminders = draft.reminders;
+            } catch(e) {}
+          }
+        }
+
+        if (meetings.length > 0) {
+          meetings.forEach(m => addMeetingRow(m));
         } else {
           addMeetingRow(); // empty row
         }
 
-        if (data.reminders && data.reminders.length > 0) {
-          data.reminders.forEach(r => addReminderRow(r));
+        if (reminders.length > 0) {
+          reminders.forEach(r => addReminderRow(r));
         } else {
           addReminderRow(); // empty row
         }
 
-        showToast(`Loaded schedule for ${date}`);
+        updateAutoSaveLabel('✓ Up to date');
       } catch (e) {
         showToast('Failed to load schedule from server', false);
       }
@@ -475,11 +514,11 @@
       const meetingRows = document.querySelectorAll('.meeting-item');
       const meetings = [];
       meetingRows.forEach(row => {
-        const time = row.querySelector('.m-time').value.trim();
+        const time = formatTimeInputTo12H(row.querySelector('.m-time').value.trim());
         const title = row.querySelector('.m-title').value.trim();
         const notes = row.querySelector('.m-notes').value.trim();
         const attendees = row.querySelector('.m-att').value.trim();
-        if (time || title) {
+        if (time || title || notes || attendees) {
           meetings.push({ time, title, notes, attendees });
         }
       });
@@ -494,8 +533,47 @@
       return { date, meetings, reminders };
     }
 
+    function updateAutoSaveLabel(text, color = '#10B981') {
+      const statusEl = document.getElementById('autosave-status');
+      if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.style.color = color;
+      }
+    }
+
+    let autoSaveTimer = null;
+    function triggerAutoSave() {
+      updateAutoSaveLabel('⏳ Saving...', '#F59E0B');
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(async () => {
+        const ok = await saveAgenda(true);
+        if (ok) {
+          const now = new Date();
+          let h = now.getHours();
+          const m = String(now.getMinutes()).padStart(2, '0');
+          const s = String(now.getSeconds()).padStart(2, '0');
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          h = h % 12 || 12;
+          updateAutoSaveLabel(`✓ Auto-saved at ${String(h).padStart(2, '0')}:${m}:${s} ${ampm}`, '#10B981');
+        } else {
+          updateAutoSaveLabel('⚠️ Local draft cached', '#F59E0B');
+        }
+      }, 800);
+    }
+
+    // Attach real-time input listeners to auto-save while typing
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('meetings-list').addEventListener('input', triggerAutoSave);
+      document.getElementById('reminders-list').addEventListener('input', triggerAutoSave);
+    });
+
     async function saveAgenda(silent = false) {
       const payload = collectData();
+      // Cache draft in localStorage immediately
+      try {
+        localStorage.setItem('pa_schedule_' + payload.date, JSON.stringify(payload));
+      } catch(e) {}
+
       try {
         const res = await fetch(`${basePath}/api/pa/schedule`, {
           method: 'POST',
@@ -507,11 +585,11 @@
           if (!silent) showToast('PA Schedule successfully saved!');
           return true;
         } else {
-          showToast('Failed to save schedule: ' + (result.error || ''), false);
+          if (!silent) showToast('Failed to save schedule: ' + (result.error || ''), false);
           return false;
         }
       } catch (e) {
-        showToast('Network error saving schedule', false);
+        if (!silent) showToast('Network error saving schedule', false);
         return false;
       }
     }

@@ -76,8 +76,8 @@ def rule_based_fallback_classify(subject: str, body: str, sender: str) -> Dict[s
         ]
         if meaningful_sentences:
             summary = meaningful_sentences[0]
-            if len(meaningful_sentences) > 1 and len(summary) < 70:
-                summary += f". {meaningful_sentences[1]}"
+            if len(summary) > 90:
+                summary = summary[:87].rsplit(' ', 1)[0] + "..."
             if not summary.endswith("."):
                 summary += "."
 
@@ -121,34 +121,37 @@ def classify_email(subject: str, body: str, sender: str, api_key: str = None) ->
         import requests
 
         prompt = f"""
-You are an expert executive email assistant for institutional leadership and busy professionals.
-Analyze the email below and generate a high-quality, actionable, 1-to-2 sentence summary.
+You are an executive email assistant for busy leadership.
+Analyze the email below and generate a brief, direct, to-the-point summary.
+CRITICAL: Do NOT overexplain, elaborate, or write long paragraphs. Keep it strictly to 1 concise sentence (under 15 words).
 
 SENDER: {sender_clean}
 SUBJECT: {subject_clean}
 EMAIL BODY CONTENT:
-{body_clean[:2500]}
+{body_clean[:2000]}
 
-EXECUTIVE SUMMARIZATION RULES:
-1. Identify the core message: What does the sender want, what happened, or what is being announced?
-2. Mention critical specifics: Include amounts (₹/$/€), deadlines, dates, key names, or system status if present.
-3. DO NOT simply repeat or paraphrase the subject line.
-4. If it is an action item (e.g., approval, invoice, signature, compliance, deadline), state what action is required from the recipient.
-5. If it is a system alert or downtime notification, specify what service is affected and current status.
-6. If it is a career/internship opportunity, specify the role, stipend/prize, and company.
-7. If it is a promotional offer/newsletter, state the specific product or offer clearly.
-8. Output plain text without emojis, special symbols, or unicode formatting.
+EXECUTIVE RULES:
+1. MAXIMUM 1 short sentence (under 15 words).
+2. DO NOT overexplain, transcribe background details, or list multiple offers/items.
+3. State ONLY the single key takeaway or action required.
+4. Examples of good concise summaries:
+   - "Approval requested for Chemistry Lab invoice of Rs 4.8L."
+   - "Registrations open for Agentic AI Hackathon (Rs 5.5L prize pool)."
+   - "Student promotional discounts on laptops and smartphones."
+   - "Server maintenance scheduled for Saturday midnight."
+   - "Seat vacancy matrix released for Round 2 counselling."
+5. Plain text only, no emojis or special markdown.
 
 Return ONLY a valid JSON object:
 {{
-  "category": "Crisp category (e.g. Admissions, Finance & Accounts, Academics & Exams, Faculty & HR, Student Affairs, System Alerts, Careers & Internships, Marketing & News, or Campus Admin)",
+  "category": "Admissions | Finance & Accounts | Academics & Exams | Faculty & HR | Student Affairs | System Alerts | Careers & Internships | Marketing & News | Urgent | General",
   "is_urgent": true or false,
-  "summary": "Concise, informative 1-2 sentence executive summary explaining the actual message, key specifics, and required action."
+  "summary": "1 brief sentence under 15 words getting straight to the point."
 }}
 """
         candidate_models = [
-            os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
-            "gemini-flash-latest",
+            os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+            "gemini-3.5-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.0-flash"
         ]

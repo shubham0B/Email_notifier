@@ -66,34 +66,81 @@ def save_all_schedules(store: Dict[str, Any]):
     with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
         json.dump(store, f, indent=2, ensure_ascii=False)
 
+def format_time_to_12h(time_str: str) -> str:
+    """
+    Converts 24-hour time or time ranges to clean 12-hour AM/PM format.
+    Examples:
+        "13:50" -> "01:50 PM"
+        "8:39" -> "08:39 AM"
+        "10:10" -> "10:10 AM"
+        "12:39" -> "12:39 PM"
+        "1:00 pm" -> "01:00 PM"
+        "13:50 - 14:30" -> "01:50 PM - 02:30 PM"
+    """
+    if not time_str or not isinstance(time_str, str):
+        return time_str or ""
+    
+    import re
+    def repl(m):
+        h = int(m.group(1))
+        mins = int(m.group(2))
+        raw_ampm = m.group(3)
+        if raw_ampm:
+            ampm = raw_ampm.upper()
+            display_h = 12 if h in [0, 12] else h % 12
+            return f"{display_h:02d}:{mins:02d} {ampm}"
+        else:
+            ampm = "AM" if h < 12 else "PM"
+            display_h = 12 if h in [0, 12] else h % 12
+            return f"{display_h:02d}:{mins:02d} {ampm}"
+
+    return re.sub(r'\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])(?:\s*([aApP][mM]))?\b', repl, time_str)
+
 def get_pa_agenda(target_date: Optional[str] = None) -> Dict[str, Any]:
     """
     Retrieves the meetings and reminders for a specific date (YYYY-MM-DD).
     Defaults to today if no date is provided.
+    Always converts meeting times to 12-hour AM/PM format.
     """
     if not target_date:
         target_date = datetime.now().strftime("%Y-%m-%d")
     
     store = load_all_schedules()
-    agenda = store.get(target_date, {
+    raw_agenda = store.get(target_date, {
         "meetings": [],
         "reminders": []
     })
-    return agenda
+
+    formatted_meetings = []
+    for m in raw_agenda.get("meetings", []):
+        m_copy = dict(m)
+        m_copy["time"] = format_time_to_12h(m.get("time", ""))
+        formatted_meetings.append(m_copy)
+
+    return {
+        "meetings": formatted_meetings,
+        "reminders": raw_agenda.get("reminders", [])
+    }
 
 def set_pa_agenda(target_date: str, meetings: List[Dict[str, str]], reminders: List[str]):
-    """Saves or updates meetings and reminders for a specific date."""
+    """Saves or updates meetings and reminders for a specific date in 12-hour format."""
     store = load_all_schedules()
+    clean_meetings = []
+    for m in (meetings or []):
+        m_copy = dict(m)
+        m_copy["time"] = format_time_to_12h(m.get("time", ""))
+        clean_meetings.append(m_copy)
+
     store[target_date] = {
-        "meetings": meetings or [],
+        "meetings": clean_meetings,
         "reminders": reminders or []
     }
     save_all_schedules(store)
 
-def archive_and_reset_pa_agenda(target_date: Optional[str] = None):
+def archive_pa_agenda(target_date: Optional[str] = None):
     """
-    Archives completed PA schedule to data/pa_schedule_history.json and resets 
-    the active schedule file so the PA starts fresh for the next cycle.
+    Archives a snapshot of the dispatched PA schedule to data/pa_schedule_history.json.
+    Keeps the active schedule intact in data/pa_schedule.json so meetings are NEVER erased.
     """
     if not target_date:
         target_date = datetime.now().strftime("%Y-%m-%d")
@@ -125,14 +172,10 @@ def archive_and_reset_pa_agenda(target_date: Optional[str] = None):
                 json.dump(history, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"⚠️ Warning: Could not write schedule history: {e}")
+        print(f"📁 PA schedule snapshot for {target_date} archived to history (active schedule preserved).")
 
-    # Reset the active schedule for this date so new schedule starts fresh
-    store[target_date] = {
-        "meetings": [],
-        "reminders": []
-    }
-    save_all_schedules(store)
-    print(f"✅ Active PA schedule for {target_date} has been archived and reset for the next cycle.")
+# Alias for backwards compatibility
+archive_and_reset_pa_agenda = archive_pa_agenda
 
 if __name__ == "__main__":
     today = datetime.now().strftime("%Y-%m-%d")

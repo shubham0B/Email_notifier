@@ -208,8 +208,8 @@ def main():
         print("\n[Step 4/4] Delivering digest to WhatsApp...")
         send_whatsapp_message(digest_message, dry_run=is_dry_run)
     if not is_dry_run:
-        from pa_manager import archive_and_reset_pa_agenda
-        archive_and_reset_pa_agenda(agenda_date)
+        from pa_manager import archive_pa_agenda
+        archive_pa_agenda(agenda_date)
 
     print("✨ Pipeline execution complete.")
 

@@ -274,13 +274,25 @@ def fetch_live_emails(lookback_hours: int = 24, target_date: str = None, start_d
             # Clean, readable body extraction (handles HTML, scripts, CSS, multipart)
             body = extract_email_body(msg)
 
+            # Direct Gmail deep link for one-click opening
+            import urllib.parse
+            msg_id_hdr = (msg.get("Message-ID") or "").strip().strip("<>")
+            if msg_id_hdr:
+                encoded_mid = urllib.parse.quote(f"rfc822msgid:{msg_id_hdr}")
+                gmail_link = f"https://mail.google.com/mail/u/0/#search/{encoded_mid}"
+            else:
+                clean_subj = re.sub(r'[^\w\s]', '', subject[:35]).strip()
+                encoded_q = urllib.parse.quote(f"{clean_subj}")
+                gmail_link = f"https://mail.google.com/mail/u/0/#search/{encoded_q}"
+
             emails.append({
                 "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
                 "sender": sender,
                 "sender_name": sender_name,
                 "subject": subject,
                 "body": body[:2500],  # Full rich text for accurate AI analysis
-                "timestamp": timestamp_str
+                "timestamp": timestamp_str,
+                "gmail_link": gmail_link
             })
 
         print(f"-> Verified {len(emails)} email(s) strictly within the target window.")

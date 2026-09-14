@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import makeWASocket, { 
     DisconnectReason, 
@@ -8,6 +9,14 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
+
+// Guard against Baileys uncaught Boom errors on socket disconnect
+process.on('uncaughtException', (err) => {
+    console.error('⚠️ [Server Error Guard] Uncaught exception:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('⚠️ [Server Error Guard] Unhandled rejection:', reason?.message || reason);
+});
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -175,13 +184,15 @@ app.post('/send-document', async (req, res) => {
 // ==========================================
 // PA PORTAL & AGENDA MANAGEMENT API
 // ==========================================
-const SCHEDULE_FILE = path.join(path.resolve(), '..', 'data', 'pa_schedule.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SCHEDULE_FILE = path.resolve(__dirname, '..', 'data', 'pa_schedule.json');
 
 // Serve static assets from public/
-app.use(express.static(path.join(path.resolve(), 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get(['/pa', '/personal/pa'], (req, res) => {
-    res.sendFile(path.join(path.resolve(), 'public', 'pa_portal.html'));
+    res.sendFile(path.join(__dirname, 'public', 'pa_portal.html'));
 });
 
 // GET PA schedule for target date
@@ -198,6 +209,18 @@ app.get(['/api/pa/schedule', '/pa/schedule'], (req, res) => {
     }
 });
 
+function formatTime12H(val) {
+    if (!val || typeof val !== 'string') return val;
+    return val.replace(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])(?:\s*([aApP][mM]))?\b/g, (match, hStr, mStr, ampmStr) => {
+        let h = parseInt(hStr, 10);
+        let m = mStr;
+        let ampm = ampmStr ? ampmStr.toUpperCase() : (h < 12 ? 'AM' : 'PM');
+        let displayH = (h === 0 || h === 12) ? 12 : (h % 12);
+        let paddedH = displayH < 10 ? '0' + displayH : displayH;
+        return `${paddedH}:${m} ${ampm}`;
+    });
+}
+
 // POST update PA schedule
 app.post(['/api/pa/schedule', '/pa/schedule'], (req, res) => {
     const { date, meetings, reminders } = req.body;
@@ -213,8 +236,12 @@ app.post(['/api/pa/schedule', '/pa/schedule'], (req, res) => {
                 store = {};
             }
         }
+        const cleanMeetings = (meetings || []).map(m => ({
+            ...m,
+            time: formatTime12H(m.time || '')
+        }));
         store[date] = {
-            meetings: meetings || [],
+            meetings: cleanMeetings,
             reminders: reminders || []
         };
         const dataDir = path.dirname(SCHEDULE_FILE);

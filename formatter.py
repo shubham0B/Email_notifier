@@ -111,8 +111,9 @@ def build_whatsapp_digest(
     if pa_agenda and (pa_agenda.get("meetings") or pa_agenda.get("reminders")):
         lines.append("📅 *TODAY'S SCHEDULE & APPOINTMENTS (FROM PA)*")
         if pa_agenda.get("meetings"):
+            from pa_manager import format_time_to_12h
             for m in pa_agenda["meetings"]:
-                m_time = m.get("time", "").strip()
+                m_time = format_time_to_12h(m.get("time", "")).strip()
                 m_title = m.get("title", "").strip()
                 m_att = m.get("attendees", "").strip()
                 m_notes = m.get("notes", "").strip()

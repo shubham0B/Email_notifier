@@ -6,14 +6,41 @@
   "2026-09-21": {
     "meetings": [
       {
-        "time": "8:39",
+        "time": "08:39 AM",
         "title": "shubham",
         "notes": "",
         "attendees": ""
       },
       {
-        "time": "13:50",
+        "time": "01:50 PM",
         "title": "sharma",
+        "notes": "",
+        "attendees": ""
+      }
+    ],
+    "reminders": []
+  },
+  "2026-09-13": {
+    "meetings": [],
+    "reminders": []
+  },
+  "2026-09-14": {
+    "meetings": [
+      {
+        "time": "08:27 PM",
+        "title": "kite",
+        "notes": "prigram of kite flying",
+        "attendees": "hsubham ,"
+      },
+      {
+        "time": "01:19 PM",
+        "title": "shubham",
+        "notes": "",
+        "attendees": "yubeb"
+      },
+      {
+        "time": "",
+        "title": "raghav",
         "notes": "",
         "attendees": ""
       }
